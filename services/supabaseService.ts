@@ -17,6 +17,10 @@ class SupabaseService {
     return false;
   }
 
+  disconnect() {
+    this.client = null;
+  }
+
   isInitialized(): boolean {
     return this.client !== null;
   }
@@ -28,9 +32,10 @@ class SupabaseService {
         .from(tableName)
         .upsert(data, { onConflict: tableName === 'profiles' ? 'codice' : 'id' });
       
-      if (error) console.error(`Errore sync ${tableName}:`, error);
+      if (error) throw error;
     } catch (err) {
-      console.error("Errore critico Supabase:", err);
+      console.error(`Errore sync ${tableName}:`, err);
+      throw err;
     }
   }
 
@@ -49,12 +54,10 @@ class SupabaseService {
       const { data, error } = await this.client
         .from(tableName)
         .select('*');
-      if (error) {
-        console.error(`Errore fetch ${tableName}:`, error);
-        return null;
-      }
+      if (error) throw error;
       return data;
     } catch (e) {
+      console.error(`Errore fetch ${tableName}:`, e);
       return null;
     }
   }
