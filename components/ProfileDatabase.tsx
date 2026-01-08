@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, UploadCloud, DownloadCloud, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, CloudUpload, CloudDownload, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial } from '../types';
 import { PROFILI as INITIAL_PROFILI } from '../constants';
 import { supabaseService } from '../services/supabaseService';
@@ -88,9 +88,9 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       
       const com = await supabaseService.fetchTable('commesse');
       if (com) { setCommesse(com); localStorage.setItem('alea_commesse', JSON.stringify(com)); }
-      alert("Sincronizzazione dal Cloud completata con successo!");
+      alert("Sincronizzazione dal Cloud completata!");
     } catch (e: any) {
-      alert("Errore durante lo scaricamento: " + e.message);
+      alert("Errore download: " + e.message);
     } finally {
       setIsSyncing(false);
     }
@@ -98,7 +98,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const pushToCloud = async () => {
     if (!isConnected) return;
-    if (!confirm("Stai per inviare i tuoi dati locali sul Cloud ALEA SISTEMI. Sovrascriverai i dati sul server. Procedere?")) return;
+    if (!confirm("Caricare i dati locali sul Cloud? Se mancano colonne (es. lungMax), assicurati di aver eseguito il nuovo script SQL.")) return;
     
     setIsSyncing(true);
     try {
@@ -106,27 +106,27 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       if (panelMaterials.length > 0) await supabaseService.syncTable('panel_materials', panelMaterials);
       if (clients.length > 0) await supabaseService.syncTable('clients', clients);
       if (commesse.length > 0) await supabaseService.syncTable('commesse', commesse);
-      alert("Dati caricati sul Cloud con successo!");
+      alert("Caricamento Cloud completato con successo!");
     } catch (e: any) {
-      alert("ERRORE CLOUD: " + e.message + "\n\nSuggerimento: Verifica di aver disabilitato la RLS su Supabase usando il codice SQL nel pannello Setup.");
+      alert("ERRORE SCHEΜΑ CLOUD: " + e.message + "\n\nIl database non riconosce alcune colonne. Per favore, copia ed esegui il NUOVO script SQL dal pannello Setup.");
     } finally {
       setIsSyncing(false);
     }
   };
 
   const handleDisconnect = () => {
-    if (!confirm("Vuoi scollegare il Cloud? L'app tornerà in modalità locale (Default ALEA).")) return;
+    if (!confirm("Scollegare il Cloud? I dati locali non verranno toccati.")) return;
     supabaseService.disconnect();
     localStorage.removeItem('alea_sb_url');
     localStorage.removeItem('alea_sb_key');
     setSbUrl('');
     setSbKey('');
     setIsConnected(false);
-    alert("Cloud scollegato. Modalità locale attiva.");
+    alert("Scollegato.");
   };
 
   const handleResetDefaults = () => {
-    if (!confirm("Vuoi resettare COMPLETAMENTE l'app? Perderai tutti i dati locali non salvati nel Cloud.")) return;
+    if (!confirm("RESET TOTALE: Perderai tutti i dati locali. Sei sicuro?")) return;
     localStorage.clear();
     window.location.reload();
   };
@@ -146,7 +146,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     
     if (isConnected) {
         try { await supabaseService.syncTable(tableName, data); } 
-        catch (e: any) { console.error("Sync Cloud fallito: " + e.message); }
+        catch (e: any) { console.error("Auto-sync Cloud fallito: " + e.message); }
     }
   };
 
@@ -209,18 +209,29 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       localStorage.setItem('alea_sb_url', sbUrl);
       localStorage.setItem('alea_sb_key', sbKey);
       setIsConnected(true);
-      alert("Connessione Cloud stabilita!");
-    } else alert("Parametri non validi. Controlla l'URL.");
+      alert("Collegato!");
+    } else alert("URL non valido.");
   };
 
-  const sqlCode = `-- SQL ALEA SISTEMI V4.0 (ESEMPIO PRONTO ALL'USO)
--- 1. Crea tabelle
-CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL, lungMax NUMERIC);
-CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL, materiale TEXT, spessori TEXT, lungDefault NUMERIC, altDefault NUMERIC);
-CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL, note TEXT, dataAggiunta TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT NOT NULL, data TIMESTAMPTZ DEFAULT now(), tipo TEXT NOT NULL, dettagli JSONB);
+  const sqlCode = `-- SQL ALEA SISTEMI V4.1 (MIGRAZIONE SICURA)
+-- 1. Crea tabelle se non esistono
+CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT NOT NULL, tipo TEXT NOT NULL);
 
--- 2. DISABILITA RLS (Cruciale per evitare l'errore permessi)
+-- 2. Aggiunge colonne mancanti (MOLTO IMPORTANTE)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS "lungMax" NUMERIC;
+ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS materiale TEXT;
+ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS spessori TEXT;
+ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS "lungDefault" NUMERIC;
+ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS "altDefault" NUMERIC;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS "dataAggiunta" TIMESTAMPTZ DEFAULT now();
+ALTER TABLE commesse ADD COLUMN IF NOT EXISTS data TIMESTAMPTZ DEFAULT now();
+ALTER TABLE commesse ADD COLUMN IF NOT EXISTS dettagli JSONB;
+
+-- 3. Disabilita RLS
 ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE panel_materials DISABLE ROW LEVEL SECURITY;
 ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
@@ -236,7 +247,7 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
             <div className="flex items-center gap-2 mt-0.5">
                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                 {isConnected ? (isSyncing ? 'Sincronizzazione...' : 'Cloud Attivo') : 'Archivio Locale'}
+                 {isConnected ? (isSyncing ? 'Sincronizzazione...' : 'Cloud Attivo') : 'Solo Archivio Locale'}
                </span>
             </div>
           </div>
@@ -245,11 +256,11 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
         {isConnected && (
             <div className="flex gap-2">
                 <button onClick={syncFromCloud} disabled={isSyncing} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase px-4 py-2 rounded-xl transition-all disabled:opacity-50">
-                    <DownloadCloud className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
-                    <span>Download dal Cloud</span>
+                    <CloudDownload className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <span>Scarica dal Cloud</span>
                 </button>
                 <button onClick={pushToCloud} disabled={isSyncing} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-lg transition-all disabled:opacity-50">
-                    <UploadCloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <CloudUpload className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
                     <span>Upload sul Cloud</span>
                 </button>
             </div>
@@ -274,8 +285,8 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
             <div className="max-w-4xl mx-auto space-y-12 py-10">
                <div className="text-center space-y-4">
                   <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Sincronizzazione Centrale</span></div>
-                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Connessione Supabase</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Usa questo pannello per collegare il tuo database. Se riscontri errori di caricamento, assicurati di aver eseguito il codice SQL qui sotto per disabilitare la RLS.</p>
+                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Condivisione ALEA SISTEMI</h3>
+                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega Supabase per sincronizzare i dati. Se vedi errori di caricamento, esegui il NUOVO script SQL qui sotto.</p>
                </div>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -288,13 +299,13 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                         </div>
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Anon Key</label>
-                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Chiave segreta..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
+                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Chiave..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <button onClick={handleConnectSupabase} className="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3">
                           {isConnected ? <CheckCircle2 className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
-                          <span>{isConnected ? 'COLLEGATO' : 'COLLEGA'}</span>
+                          <span>{isConnected ? 'ATTIVO' : 'COLLEGA'}</span>
                         </button>
                         <button onClick={handleDisconnect} disabled={!isConnected} className="bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-30">
                           <LogOut className="w-6 h-6" />
@@ -307,18 +318,17 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                   <div className="space-y-4">
                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Codice SQL per Database</span>
-                        <button onClick={() => { navigator.clipboard.writeText(sqlCode); alert("SQL Copiato!"); }} className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"><Copy className="w-3 h-3" /> COPIA SQL</button>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Script SQL di Migrazione</span>
+                        <button onClick={() => { navigator.clipboard.writeText(sqlCode); alert("Copiato!"); }} className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"><Copy className="w-3 h-3" /> COPIA SQL</button>
                       </div>
                       <div className="flex items-start gap-2 bg-yellow-50 p-2 rounded-lg border border-yellow-100 mb-2">
                          <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
-                         <p className="text-[8px] text-yellow-800 font-bold uppercase">Importante: Esegui questo codice per evitare errori di permessi!</p>
+                         <p className="text-[8px] text-yellow-800 font-bold uppercase">Nota: Esegui questo script se avevi già tabelle vecchie.</p>
                       </div>
                       <pre className="text-[9px] font-mono text-slate-500 bg-white p-4 rounded-xl border border-slate-100 overflow-x-auto h-32">{sqlCode}</pre>
                     </div>
-                    
                     <button onClick={handleResetDefaults} className="w-full flex items-center justify-center gap-3 bg-red-50 hover:bg-red-100 text-red-600 font-black py-4 rounded-[1.5rem] border border-red-200 transition-all text-xs uppercase tracking-widest">
-                        <RefreshCw className="w-4 h-4" /> Reset Totale App
+                        <RefreshCw className="w-4 h-4" /> Reset Totale Locale
                     </button>
                   </div>
                </div>
@@ -326,8 +336,8 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
           ) : (
             <>
               <div className="flex flex-col md:flex-row gap-4 items-center">
-                <div className="relative flex-1 w-full"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" /><input type="text" placeholder={`Cerca in ${activeTab}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none transition-all font-bold text-slate-700" /></div>
-                {!isAdding && activeTab !== 'commesse' && (<button onClick={() => { setIsAdding(true); setIsEditing(false); setEditingId(null); }} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl shadow-xl shadow-red-100 font-black flex items-center justify-center gap-3 transition-all"><Plus className="w-6 h-6" /><span>AGGIUNGI</span></button>)}
+                <div className="relative flex-1 w-full"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" /><input type="text" placeholder={`Cerca in ${activeTab}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-700" /></div>
+                {!isAdding && activeTab !== 'commesse' && (<button onClick={() => { setIsAdding(true); setIsEditing(false); setEditingId(null); }} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl shadow-xl font-black flex items-center justify-center gap-3 transition-all"><Plus className="w-6 h-6" /><span>AGGIUNGI</span></button>)}
               </div>
               
               {isAdding && (
