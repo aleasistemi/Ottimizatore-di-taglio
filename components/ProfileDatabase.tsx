@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, AlertCircle, CheckCircle2, Eye, Info, ShieldCheck, Copy, Square, ArrowUpCloud, ArrowDownCloud } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, Eye, Info, ShieldCheck, Copy, Square, CloudUpload, CloudDownload } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial } from '../types';
 import { PROFILI as INITIAL_PROFILI } from '../constants';
 import { supabaseService } from '../services/supabaseService';
@@ -41,9 +41,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     loadLocalData();
     const initialized = supabaseService.isInitialized();
     setIsConnected(initialized);
-    if (initialized) {
-        syncFromCloud();
-    }
+    // Non auto-sincronizzare al boot per evitare wipe accidentali
   }, []);
 
   const handleTabChange = (tab: DbTab) => {
@@ -52,29 +50,15 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   };
 
   const loadLocalData = () => {
-    // Caricamento Profili
     const savedP = localStorage.getItem('alea_profiles');
-    if (savedP) {
-      setProfiles(JSON.parse(savedP));
-    } else {
+    if (savedP) setProfiles(JSON.parse(savedP));
+    else {
       const defaults = Object.entries(INITIAL_PROFILI).map(([codice, p]) => ({ codice, descr: p.descr, lungMax: p.lungMax || 6000 }));
       setProfiles(defaults);
       localStorage.setItem('alea_profiles', JSON.stringify(defaults));
     }
-
-    // Caricamento Pannelli
     const savedPan = localStorage.getItem('alea_panel_materials');
-    if (savedPan) {
-      setPanelMaterials(JSON.parse(savedPan));
-    } else {
-      // Default per pannelli se vuoto
-      const defaultPanels: PanelMaterial[] = [
-        { id: 'p1', codice: 'LEX2', descr: 'Lexan Trasparente 2mm', materiale: 'Lexan', spessori: '2, 3, 4, 5, 6', lungDefault: 3050, altDefault: 2050 },
-        { id: 'p2', codice: 'DIB3', descr: 'Dibond Bianco 3mm', materiale: 'Dibond', spessori: '3, 4', lungDefault: 3050, altDefault: 1500 }
-      ];
-      setPanelMaterials(defaultPanels);
-      localStorage.setItem('alea_panel_materials', JSON.stringify(defaultPanels));
-    }
+    if (savedPan) setPanelMaterials(JSON.parse(savedPan));
     
     const savedC = localStorage.getItem('alea_clients');
     if (savedC) setClients(JSON.parse(savedC));
@@ -84,6 +68,8 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const syncFromCloud = async () => {
     if (!supabaseService.isInitialized()) return;
+    if (!confirm("Stai per scaricare i dati dal Cloud. Questo sovrascriverà i tuoi dati locali su questo PC. Procedere?")) return;
+    
     setIsSyncing(true);
     try {
       const p = await supabaseService.fetchTable('profiles');
@@ -97,6 +83,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       
       const com = await supabaseService.fetchTable('commesse');
       if (com) { setCommesse(com); localStorage.setItem('alea_commesse', JSON.stringify(com)); }
+      alert("Dati scaricati con successo dal Cloud!");
     } catch (e) {
       console.error("Errore pull:", e);
     } finally {
@@ -109,7 +96,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
         alert("Prima collega il database in Setup Cloud.");
         return;
     }
-    if (!confirm("Stai per sovrascrivere i dati del Cloud con quelli presenti su questo PC. Procedere?")) return;
+    if (!confirm("ATTENZIONE: Stai per caricare i tuoi dati locali sul Cloud. Se il server contiene altri dati, verranno aggiornati. Procedere?")) return;
     
     setIsSyncing(true);
     try {
@@ -117,9 +104,9 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       if (panelMaterials.length > 0) await supabaseService.syncTable('panel_materials', panelMaterials);
       if (clients.length > 0) await supabaseService.syncTable('clients', clients);
       if (commesse.length > 0) await supabaseService.syncTable('commesse', commesse);
-      alert("Sincronizzazione completata! I dati sono ora sul server.");
+      alert("Sincronizzazione completata! I tuoi dati locali sono ora sul server ALEA SISTEMI.");
     } catch (e) {
-      alert("Errore durante il caricamento. Verifica la console.");
+      alert("Errore durante il caricamento. Verifica i parametri di connessione.");
     } finally {
       setIsSyncing(false);
     }
@@ -203,17 +190,19 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       
       const cloudProfiles = await supabaseService.fetchTable('profiles');
       if (!cloudProfiles || cloudProfiles.length === 0) {
-        if (confirm("Database Cloud vuoto. Vuoi caricare i tuoi dati locali (Profili e Pannelli) ora?")) {
+        if (confirm("Database Cloud vuoto. Vuoi caricare i tuoi dati locali (Profili e Pannelli) ora per iniziare?")) {
            await pushToCloud();
         }
       } else {
-          syncFromCloud();
+          if (confirm("Database Cloud trovato con dati. Vuoi scaricarli ora per sincronizzare questo PC?")) {
+              await syncFromCloud();
+          }
       }
-      alert("Connessione ALEA SISTEMI stabilita!");
-    } else alert("Parametri non validi.");
+      alert("Connessione ALEA SISTEMI stabilita correttamente!");
+    } else alert("Parametri non validi. Verifica URL e Key di Supabase.");
   };
 
-  const sqlCode = `-- SCRIPTS SQL ALEA SISTEMI V2.9
+  const sqlCode = `-- SCRIPTS SQL ALEA SISTEMI V3.0
 CREATE TABLE profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL, lungMax NUMERIC);
 CREATE TABLE panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL, materiale TEXT, spessori TEXT, lungDefault NUMERIC, altDefault NUMERIC);
 CREATE TABLE clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL, note TEXT, dataAggiunta TIMESTAMPTZ DEFAULT now());
@@ -229,7 +218,7 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
             <div className="flex items-center gap-2 mt-0.5">
                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                 {isConnected ? (isSyncing ? 'Sincronizzazione in corso...' : 'Cloud Attivo') : 'Solo Archivio Locale'}
+                 {isConnected ? (isSyncing ? 'Sincronizzazione...' : 'Cloud Attivo') : 'Solo Archivio Locale'}
                </span>
             </div>
           </div>
@@ -238,11 +227,11 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
         {isConnected && (
             <div className="flex gap-2">
                 <button onClick={syncFromCloud} disabled={isSyncing} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase px-4 py-2 rounded-xl transition-all disabled:opacity-50">
-                    <ArrowDownCloud className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <CloudDownload className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
                     <span>Scarica dal Cloud</span>
                 </button>
                 <button onClick={pushToCloud} disabled={isSyncing} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-lg transition-all disabled:opacity-50">
-                    <ArrowUpCloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <CloudUpload className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
                     <span>Carica nel Cloud</span>
                 </button>
             </div>
@@ -268,7 +257,7 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
                <div className="text-center space-y-4">
                   <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Sincronizzazione Centrale</span></div>
                   <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Condivisione ALEA SISTEMI</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega ALEA SISTEMI al tuo database Supabase per non perdere mai un profilo o una commessa.</p>
+                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega ALEA SISTEMI al tuo database Supabase per non perdere mai un profilo o una commessa tra i diversi reparti.</p>
                </div>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">

@@ -10,7 +10,7 @@ import { supabaseService } from './services/supabaseService';
 
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<OptimizerMode>(OptimizerMode.BARRE);
-  const [dbTab, setDbTab] = useState<'profili' | 'clienti' | 'commesse' | 'settings'>('profili');
+  const [dbTab, setDbTab] = useState<'profili' | 'pannelli' | 'clienti' | 'commesse' | 'settings'>('profili');
   const [loadedCommessa, setLoadedCommessa] = useState<CommessaArchiviata | null>(null);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isCloudActive, setIsCloudActive] = useState(false);
@@ -19,7 +19,6 @@ const App: React.FC = () => {
     const accepted = localStorage.getItem('alea_disclaimer_accepted');
     if (!accepted) setShowDisclaimer(true);
 
-    // Controllo iniziale connessione
     const sbUrl = localStorage.getItem('alea_sb_url');
     const sbKey = localStorage.getItem('alea_sb_key');
     if (sbUrl && sbKey) {
@@ -27,7 +26,6 @@ const App: React.FC = () => {
       setIsCloudActive(ok);
     }
 
-    // Listener per aggiornamenti di stato (custom event o semplice polling)
     const interval = setInterval(() => {
       setIsCloudActive(supabaseService.isInitialized());
     }, 2000);
@@ -53,7 +51,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 overflow-hidden">
-      {/* Disclaimer Modal */}
       {showDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-300">
