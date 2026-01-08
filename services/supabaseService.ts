@@ -5,17 +5,25 @@ class SupabaseService {
   private client: SupabaseClient | null = null;
 
   init(url: string, key: string) {
-    if (url && key) {
-      this.client = createClient(url, key);
-      return true;
+    if (url && key && url.startsWith('http')) {
+      try {
+        this.client = createClient(url, key);
+        return true;
+      } catch (e) {
+        console.error("Errore init Supabase:", e);
+        return false;
+      }
     }
     return false;
+  }
+
+  isInitialized(): boolean {
+    return this.client !== null;
   }
 
   async syncTable(tableName: string, data: any[]) {
     if (!this.client) return;
     try {
-      // Usiamo upsert per aggiornare se esiste o inserire se nuovo
       const { error } = await this.client
         .from(tableName)
         .upsert(data, { onConflict: tableName === 'profiles' ? 'codice' : 'id' });
@@ -37,14 +45,18 @@ class SupabaseService {
 
   async fetchTable(tableName: string) {
     if (!this.client) return null;
-    const { data, error } = await this.client
-      .from(tableName)
-      .select('*');
-    if (error) {
-      console.error(`Errore fetch ${tableName}:`, error);
+    try {
+      const { data, error } = await this.client
+        .from(tableName)
+        .select('*');
+      if (error) {
+        console.error(`Errore fetch ${tableName}:`, error);
+        return null;
+      }
+      return data;
+    } catch (e) {
       return null;
     }
-    return data;
   }
 }
 

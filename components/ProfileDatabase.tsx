@@ -37,11 +37,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   useEffect(() => {
     loadLocalData();
-    if (sbUrl && sbKey) {
-      const ok = supabaseService.init(sbUrl, sbKey);
-      setIsConnected(ok);
-      if (ok) syncFromCloud();
-    }
+    setIsConnected(supabaseService.isInitialized());
   }, []);
 
   const handleTabChange = (tab: DbTab) => {
@@ -94,6 +90,37 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     if (isConnected) await supabaseService.deleteFromTable(tableName, id, idCol);
   };
 
+  // Fix: Implemented handleSaveProfile to handle both addition and editing of profiles
+  const handleSaveProfile = async () => {
+    if (!profileForm.codice || !profileForm.descr) {
+      alert("Compila tutti i campi obbligatori!");
+      return;
+    }
+
+    let updatedProfiles;
+    if (isEditing) {
+      updatedProfiles = profiles.map(p => p.codice === profileForm.codice ? profileForm : p);
+    } else {
+      if (profiles.some(p => p.codice === profileForm.codice)) {
+        alert("Questo codice profilo esiste già!");
+        return;
+      }
+      updatedProfiles = [...profiles, profileForm];
+    }
+
+    await saveToDbAndCloud('profili', updatedProfiles);
+    setIsAdding(false);
+    setIsEditing(false);
+    setProfileForm({ codice: '', descr: '', lungMax: 6000 });
+  };
+
+  // Fix: Implemented startEditProfile to initialize the form for editing
+  const startEditProfile = (p: Profile) => {
+    setProfileForm({ ...p });
+    setIsAdding(true);
+    setIsEditing(true);
+  };
+
   const handleConnectSupabase = () => {
     const ok = supabaseService.init(sbUrl, sbKey);
     if (ok) {
@@ -101,40 +128,18 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       localStorage.setItem('alea_sb_key', sbKey);
       setIsConnected(true);
       syncFromCloud();
-      alert("Connessione stabilita con successo!");
-    } else alert("Parametri non validi.");
+      alert("Connessione ALEA SISTEMI Cloud stabilita con successo!");
+    } else alert("Parametri non validi. Verifica URL e Key.");
   };
 
-  const startEditProfile = (p: Profile) => {
-    setProfileForm(p); setEditingId(p.codice); setIsEditing(true); setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleSaveProfile = async () => {
-    if (!profileForm.codice || !profileForm.descr) return;
-    let newProfiles;
-    if (isEditing) newProfiles = profiles.map(p => p.codice === editingId ? profileForm : p);
-    else { if (profiles.find(p => p.codice === profileForm.codice)) return alert("Codice esistente!"); newProfiles = [profileForm, ...profiles]; }
-    await saveToDbAndCloud('profili', newProfiles);
-    setIsAdding(false); setIsEditing(false); setEditingId(null); setProfileForm({ codice: '', descr: '', lungMax: 6000 });
-  };
-
-  const handleSaveClient = async () => {
-    if (!clientForm.nome) return;
-    const nuovoCliente: Client = { id: Math.random().toString(36).substr(2, 9), nome: clientForm.nome, note: clientForm.note, dataAggiunta: new Date().toISOString() };
-    const newClients = [nuovoCliente, ...clients];
-    await saveToDbAndCloud('clienti', newClients);
-    setClientForm({ nome: '', note: '' }); setIsAdding(false);
-  };
-
-  const sqlCode = `-- TABELLA PROFILI
+  const sqlCode = `-- TABELLA PROFILI ALEA SISTEMI
 CREATE TABLE profiles (
   codice TEXT PRIMARY KEY,
   descr TEXT NOT NULL,
   lungMax NUMERIC
 );
 
--- TABELLA CLIENTI
+-- TABELLA CLIENTI ALEA SISTEMI
 CREATE TABLE clients (
   id TEXT PRIMARY KEY,
   nome TEXT NOT NULL,
@@ -142,7 +147,7 @@ CREATE TABLE clients (
   dataAggiunta TIMESTAMPTZ DEFAULT now()
 );
 
--- TABELLA COMMESSE
+-- TABELLA COMMESSE ALEA SISTEMI
 CREATE TABLE commesse (
   id TEXT PRIMARY KEY,
   numero TEXT NOT NULL,
@@ -158,10 +163,12 @@ CREATE TABLE commesse (
         <div className="flex items-center gap-4">
           <div className="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-200"><Database className="w-8 h-8 text-white" /></div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">Gestione Archivi</h2>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">Archivi ALEA SISTEMI</h2>
             <div className="flex items-center gap-2 mt-0.5">
-               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
-               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{isConnected ? 'ALEA SISTEMI Cloud Sincronizzato' : 'Modalità Archivio Locale ALEA SISTEMI'}</span>
+               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
+               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                 {isConnected ? 'Sincronizzazione Cloud Attiva' : 'Archivio Locale Attivo'}
+               </span>
             </div>
           </div>
         </div>
@@ -169,7 +176,7 @@ CREATE TABLE commesse (
 
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden min-h-[600px]">
         <div className="flex border-b border-slate-100 bg-slate-50/30">
-          {[ { id: 'profili', label: 'Anagrafica Profili', icon: Database }, { id: 'clienti', label: 'Clienti', icon: Users }, { id: 'commesse', label: 'Archivio Commesse', icon: Briefcase }, { id: 'settings', label: 'Setup Cloud', icon: Settings } ].map(tab => (
+          {[ { id: 'profili', label: 'Profili', icon: Database }, { id: 'clienti', label: 'Clienti', icon: Users }, { id: 'commesse', label: 'Commesse', icon: Briefcase }, { id: 'settings', label: 'Setup Cloud', icon: Settings } ].map(tab => (
             <button key={tab.id} onClick={() => { handleTabChange(tab.id as DbTab); setIsAdding(false); setIsEditing(false); }} className={`flex-1 flex items-center justify-center gap-3 py-5 text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-white text-red-600 border-b-2 border-red-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><tab.icon className="w-4 h-4" /> {tab.label}</button>
           ))}
         </div>
@@ -178,9 +185,9 @@ CREATE TABLE commesse (
           {activeTab === 'settings' ? (
             <div className="max-w-4xl mx-auto space-y-12 py-10">
                <div className="text-center space-y-4">
-                  <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">ALEA SISTEMI - Bring Your Own Database</span></div>
-                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Sincronizzazione Cloud Privata</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega il tuo account Supabase per avere i dati di ALEA SISTEMI su ogni dispositivo della tua azienda.</p>
+                  <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">ALEA SISTEMI - Cloud Privato</span></div>
+                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Sincronizzazione BYODB</h3>
+                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega ALEA SISTEMI al tuo Supabase personale per condividere i dati tra i PC della tua officina.</p>
                </div>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
@@ -189,30 +196,29 @@ CREATE TABLE commesse (
                     <div className="relative z-10 space-y-6">
                       <div className="space-y-4">
                         <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Project URL (da Supabase)</label>
-                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Project URL</label>
+                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://xyz.supabase.co" className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">API Key (Anon Public)</label>
-                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="eyJhb..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Anon Key</label>
+                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Incolla qui la chiave..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
                         </div>
                       </div>
                       <button onClick={handleConnectSupabase} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95">
                         {isConnected ? <CheckCircle2 className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
-                        <span>{isConnected ? 'SISTEMA CONNESSO' : 'ATTIVA CLOUD ALEA'}</span>
+                        <span>{isConnected ? 'CONNESSIONE OK' : 'ATTIVA CLOUD ALEA'}</span>
                       </button>
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                       <h4 className="flex items-center gap-2 font-black text-slate-800 text-lg tracking-tight"><Info className="w-5 h-5 text-blue-600" />Guida Passo-Passo</h4>
+                       <h4 className="flex items-center gap-2 font-black text-slate-800 text-lg tracking-tight"><Info className="w-5 h-5 text-blue-600" />Istruzioni Passo-Passo</h4>
                        <div className="space-y-4">
                          {[
-                           { t: "1. Crea Progetto", d: "Vai su Supabase.com, crea un account e apri un nuovo progetto 'Alea-Database'." },
-                           { t: "2. SQL Editor", d: "Nella barra laterale di Supabase, clicca su 'SQL Editor' -> 'New Query'." },
-                           { t: "3. Incolla Schema", d: "Copia il codice SQL qui sotto e incollalo nell'editor di Supabase, poi premi 'Run'." },
-                           { t: "4. Copia API Keys", d: "Vai in Settings -> API, copia URL e Anon Key e incollali nel form a sinistra." }
+                           { t: "1. Crea Account", d: "Vai su Supabase.com, registrati e crea un nuovo progetto denominato 'ALEA-SYNC'." },
+                           { t: "2. Esegui SQL", d: "Copia il codice SQL qui sotto e incollalo nell'Editor SQL di Supabase, poi premi 'Run'." },
+                           { t: "3. Copia API", d: "In Settings -> API trovi URL e Anon Key. Incollali nel modulo a sinistra." }
                          ].map((step, i) => (
                            <div key={i} className="flex gap-4">
                              <div className="space-y-1">
@@ -226,18 +232,18 @@ CREATE TABLE commesse (
                     
                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Script SQL per Supabase</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Codice SQL per Supabase</span>
                         <button 
                           onClick={() => {
                             navigator.clipboard.writeText(sqlCode);
-                            alert("SQL copiato negli appunti!");
+                            alert("SQL ALEA SISTEMI copiato!");
                           }}
                           className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"
                         >
                           <Copy className="w-3 h-3" /> COPIA SQL
                         </button>
                       </div>
-                      <pre className="text-[9px] font-mono text-slate-500 bg-white p-4 rounded-xl border border-slate-100 overflow-x-auto">
+                      <pre className="text-[9px] font-mono text-slate-500 bg-white p-4 rounded-xl border border-slate-100 overflow-x-auto h-32">
                         {sqlCode}
                       </pre>
                     </div>
@@ -253,19 +259,13 @@ CREATE TABLE commesse (
               
               {isAdding && (
                 <div className={`p-8 rounded-[2rem] border-2 border-dashed ${isEditing ? 'border-blue-300 bg-blue-50/30' : 'border-red-200 bg-slate-50/50'} animate-in zoom-in-95 duration-200`}>
-                   <div className="flex justify-between items-center mb-6"><h4 className={`font-black uppercase tracking-widest text-sm ${isEditing ? 'text-blue-700' : 'text-slate-500'}`}>{isEditing ? 'MODIFICA PROFILO' : 'NUOVO PROFILO'}</h4><button onClick={() => { setIsAdding(false); setIsEditing(false); }} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5" /></button></div>
+                   <div className="flex justify-between items-center mb-6"><h4 className={`font-black uppercase tracking-widest text-sm ${isEditing ? 'text-blue-700' : 'text-slate-500'}`}>{isEditing ? 'MODIFICA PROFILO' : 'NUOVO PROFILO ALEA SISTEMI'}</h4><button onClick={() => { setIsAdding(false); setIsEditing(false); }} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5" /></button></div>
                    {activeTab === 'profili' && (
                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Codice</label><input disabled={isEditing} type="text" placeholder="AL-123" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black focus:ring-2 focus:ring-red-500 outline-none disabled:bg-slate-200" /></div>
                         <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Descrizione</label><input type="text" placeholder="Profilo alluminio..." value={profileForm.descr} onChange={e=>setProfileForm({...profileForm, descr: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-bold focus:ring-2 focus:ring-red-500 outline-none" /></div>
-                        <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Barra Std (mm)</label><input type="number" value={profileForm.lungMax || 6000} onChange={e=>setProfileForm({...profileForm, lungMax: parseFloat(e.target.value)})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black text-red-600 focus:ring-2 focus:ring-red-500 outline-none" /></div>
+                        <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Std (mm)</label><input type="number" value={profileForm.lungMax || 6000} onChange={e=>setProfileForm({...profileForm, lungMax: parseFloat(e.target.value)})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black text-red-600 focus:ring-2 focus:ring-red-500 outline-none" /></div>
                         <div className="flex items-end"><button onClick={handleSaveProfile} className={`w-full ${isEditing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'} text-white font-black py-3.5 rounded-xl shadow-lg transition-all`}>{isEditing ? 'AGGIORNA' : 'SALVA'}</button></div>
-                     </div>
-                   )}
-                   {activeTab === 'clienti' && (
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Ragione Sociale</label><input type="text" placeholder="Azienda S.p.A." value={clientForm.nome} onChange={e=>setClientForm({...clientForm, nome: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black outline-none focus:ring-2 focus:ring-red-500" /></div>
-                        <div className="flex items-end"><button onClick={handleSaveClient} className="w-full bg-slate-900 text-white font-black py-3.5 rounded-xl shadow-lg">SALVA CLIENTE</button></div>
                      </div>
                    )}
                 </div>
@@ -296,13 +296,6 @@ CREATE TABLE commesse (
                              <td className="px-6 py-5 text-sm font-bold text-slate-600">{p.descr}</td>
                              <td className="px-6 py-5 text-center font-mono font-black text-red-600 text-xs">{p.lungMax || 6000} mm</td>
                              <td className="px-6 py-5 text-center"><div className="flex items-center justify-center gap-2 opacity-30 group-hover:opacity-100 transition-opacity"><button onClick={()=>startEditProfile(p)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Edit3 className="w-4 h-4" /></button><button onClick={()=>deleteFromDbAndCloud('profili', p.codice)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button></div></td>
-                          </tr>
-                       ))}
-                       {activeTab === 'clienti' && clients.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                          <tr key={c.id} className="group hover:bg-slate-50/80 transition-all">
-                             <td className="px-6 py-5 font-black text-slate-800 text-sm">{c.nome}</td>
-                             <td className="px-6 py-5 text-center font-mono text-[10px] text-slate-400">{new Date(c.dataAggiunta).toLocaleDateString()}</td>
-                             <td className="px-6 py-5 text-center"><button onClick={()=>deleteFromDbAndCloud('clienti', c.id)} className="p-2 text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button></td>
                           </tr>
                        ))}
                        {activeTab === 'commesse' && commesse.filter(c => c.numero.toLowerCase().includes(searchTerm.toLowerCase()) || c.cliente.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
