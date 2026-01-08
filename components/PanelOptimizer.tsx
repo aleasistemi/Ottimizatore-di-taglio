@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Play, Download, Trash2, Layout, Maximize, Settings, FileText, Square, Save, FileSpreadsheet, Ruler } from 'lucide-react';
-import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial } from '../types';
+import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
@@ -27,6 +27,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
 
   const [availablePanels, setAvailablePanels] = useState<PanelMaterial[]>([]);
   const [availableThicknesses, setAvailableThicknesses] = useState<string[]>([]);
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [distinta, setDistinta] = useState<PanelCutRequest[]>([]);
   const [results, setResults] = useState<PanelOptimizationResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -35,6 +36,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   useEffect(() => {
     const saved = localStorage.getItem('alea_panel_materials');
     if (saved) setAvailablePanels(JSON.parse(saved));
+    const clients = localStorage.getItem('alea_clients');
+    if (clients) setAvailableClients(JSON.parse(clients));
 
     if (externalData && externalData.tipo === 'pannelli') {
       setCliente(externalData.cliente);
@@ -54,9 +57,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       const thicknesses = p.spessori.split(',').map(s => s.trim());
       setAvailableThicknesses(thicknesses);
       if (thicknesses.length > 0) setSpessore(thicknesses[0]);
-    } else {
-        setSelectedPanelId('');
-        setAvailableThicknesses([]);
     }
   };
 
@@ -82,31 +82,40 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
 
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
+    
+    // Gestione Clienti
+    let updatedClients = [...availableClients];
+    if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
+        const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
+        updatedClients = [newClient, ...availableClients];
+        localStorage.setItem('alea_clients', JSON.stringify(updatedClients));
+        setAvailableClients(updatedClients);
+        if (supabaseService.isInitialized()) await supabaseService.syncTable('clients', updatedClients);
+    }
+
+    // Gestione Commessa
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
-    
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
-      numero: commessa || 'Senza Nome',
+      numero: commessa || 'Senza Rif.',
       cliente: cliente || 'Privato',
       data: new Date().toISOString(),
       tipo: 'pannelli',
       dettagli: { distinta, results }
     };
-    
     const updatedCommesse = [nuovaCommessa, ...commesse];
     localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
     
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa archiviata con successo in locale e nel Cloud!");
+            alert("Commessa e Cliente archiviati nel Cloud ALEA!");
         } catch (e) {
-            console.error(e);
-            alert("Archiviata in locale, ma sincronizzazione Cloud fallita.");
+            alert("Salvata in locale, errore sincronizzazione Cloud.");
         }
     } else {
-        alert("Commessa archiviata con successo nell'archivio locale!");
+        alert("Archiviata nell'archivio locale!");
     }
   };
 
@@ -135,27 +144,22 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     const margin = 20;
     const groups = Object.values(results) as any[];
     if (groups.length === 0) return;
-    
     const sheetToDraw = groups[0]?.sheets[0]?.panels || [];
     const scale = Math.min((canvas.width - 2 * margin) / sheetW, (canvas.height - 2 * margin) / sheetH);
     const offsetX = (canvas.width - sheetW * scale) / 2;
     const offsetY = (canvas.height - sheetH * scale) / 2;
-    
     ctx.strokeStyle = '#334155'; ctx.lineWidth = 2; ctx.strokeRect(offsetX, offsetY, sheetW * scale, sheetH * scale);
     ctx.fillStyle = '#f8fafc'; ctx.fillRect(offsetX, offsetY, sheetW * scale, sheetH * scale);
-    
     sheetToDraw.forEach(p => {
       ctx.fillStyle = COLORI_MATERIALE[p.material] || '#cbd5e1';
       ctx.fillRect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale);
       ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.strokeRect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale);
-      
       if (p.w * scale > 40 && p.h * scale > 20) {
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         const label = `${p.w}x${p.h}`;
         const metrics = ctx.measureText(label);
         ctx.fillRect(offsetX + p.x * scale + (p.w * scale / 2) - metrics.width / 2 - 4, offsetY + p.y * scale + (p.h * scale / 2) - 8, metrics.width + 8, 16);
-        ctx.fillStyle = 'black'; ctx.font = 'black 11px Inter';
-        ctx.textAlign = 'center';
+        ctx.fillStyle = 'black'; ctx.font = 'black 11px Inter'; ctx.textAlign = 'center';
         ctx.fillText(label, offsetX + p.x * scale + (p.w * scale / 2), offsetY + p.y * scale + (p.h * scale / 2) + 4);
       }
     });
@@ -167,7 +171,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
         <section className="bg-white p-6 rounded-[2rem] border border-gray-200 shadow-xl">
            <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2 uppercase tracking-tighter"><FileText className="w-5 h-5 text-red-600" /><span>Testata Commessa</span></h3>
            <div className="space-y-4">
-              <input type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Nome Cliente..." />
+              <input list="clients-list" type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Nome Cliente..." />
+              <datalist id="clients-list">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
               <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Numero Commessa..." />
            </div>
            
@@ -195,13 +200,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
               </div>
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Spessore</label>
-                {availableThicknesses.length > 0 ? (
-                  <select value={spessore} onChange={e=>setSpessore(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black">
-                    {availableThicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-                  </select>
-                ) : (
-                  <input type="text" value={spessore} onChange={e=>setSpessore(e.target.value)} placeholder="es. 3" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black" />
-                )}
+                <input type="text" value={spessore} onChange={e=>setSpessore(e.target.value)} placeholder="es. 3" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -261,7 +260,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
             </button>
           </div>
         </section>
-
         {results && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -272,7 +270,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
               </div>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-gray-200 shadow-2xl flex flex-col items-center justify-center relative">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 italic border-b pb-2">Layout di Taglio Reale</div>
               <div className="bg-slate-100/50 p-6 rounded-[2.5rem] border-2 border-dashed border-slate-200 w-full flex items-center justify-center">
                 <canvas ref={canvasRef} width={1000} height={600} className="max-w-full h-auto drop-shadow-2xl rounded-lg" />
               </div>

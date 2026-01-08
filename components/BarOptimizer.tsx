@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RotateCcw } from 'lucide-react';
-import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata } from '../types';
+import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata, Client } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
@@ -25,7 +25,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const [groupBars, setGroupBars] = useState(true);
 
   const [availableProfiles, setAvailableProfiles] = useState<any[]>([]);
-  const [availableClients, setAvailableClients] = useState<any[]>([]);
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
 
   const [distinta, setDistinta] = useState<CutRequest[]>([]);
   const [results, setResults] = useState<OptimizationResult | null>(null);
@@ -78,43 +78,42 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     setQuantita(1);
   };
 
-  const handleExportPdf = () => {
-    if (!results) return;
-    exportService.toPdf(results, cliente, commessa, groupBars);
-  };
-
-  const handleExportCsv = () => {
-    if (!results) return;
-    exportService.toCsv(results, groupBars);
-  };
-
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
+    
+    // Gestione Clienti
+    let updatedClients = [...availableClients];
+    if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
+        const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
+        updatedClients = [newClient, ...availableClients];
+        localStorage.setItem('alea_clients', JSON.stringify(updatedClients));
+        setAvailableClients(updatedClients);
+        if (supabaseService.isInitialized()) await supabaseService.syncTable('clients', updatedClients);
+    }
+
+    // Gestione Commessa
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
-    
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
-      numero: commessa || 'Senza Nome',
+      numero: commessa || 'Senza Rif.',
       cliente: cliente || 'Privato',
       data: new Date().toISOString(),
       tipo: 'barre',
       dettagli: { distinta, results }
     };
-    
     const updatedCommesse = [nuovaCommessa, ...commesse];
     localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
     
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa salvata in locale e sincronizzata nel Cloud!");
+            alert("Commessa e Cliente archiviati nel Cloud ALEA!");
         } catch (e) {
-            console.error(e);
-            alert("Commessa salvata in locale, errore sincro Cloud.");
+            alert("Salvata in locale, errore sincronizzazione Cloud.");
         }
     } else {
-        alert("Commessa archiviata con successo nell'archivio locale!");
+        alert("Archiviata nell'archivio locale di questo PC!");
     }
   };
 
@@ -301,8 +300,8 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><Boxes className="w-6 h-6 text-red-600" />RISULTATI</h3>
                   <div className="flex gap-2">
-                    <button onClick={handleExportCsv} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-slate-800 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4 text-green-600" /><span>CSV</span></button>
-                    <button onClick={handleExportPdf} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-red-500 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><Download className="w-4 h-4 text-red-600" /><span>STAMPA PDF</span></button>
+                    <button onClick={() => exportService.toCsv(results, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-slate-800 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4 text-green-600" /><span>CSV</span></button>
+                    <button onClick={() => exportService.toPdf(results, cliente, commessa, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-red-500 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><Download className="w-4 h-4 text-red-600" /><span>STAMPA PDF</span></button>
                   </div>
                </div>
                {(Object.entries(results) as [string, any][]).map(([code, data]) => {
