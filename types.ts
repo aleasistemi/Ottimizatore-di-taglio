@@ -5,6 +5,16 @@ export interface Profile {
   lungMax: number | null;
 }
 
+export interface PanelMaterial {
+  id: string;
+  codice: string;
+  descr: string;
+  materiale: string;
+  spessori: string; // Es: "2, 3, 4, 5"
+  lungDefault: number;
+  altDefault: number;
+}
+
 export interface Client {
   id: string;
   nome: string;
