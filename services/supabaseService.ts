@@ -26,16 +26,17 @@ class SupabaseService {
   }
 
   async syncTable(tableName: string, data: any[]) {
-    if (!this.client) return;
+    if (!this.client) throw new Error("Client non inizializzato");
     try {
+      // Upsert gestisce sia inserimento che aggiornamento
       const { error } = await this.client
         .from(tableName)
         .upsert(data, { onConflict: tableName === 'profiles' ? 'codice' : 'id' });
       
       if (error) throw error;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Errore sync ${tableName}:`, err);
-      throw err;
+      throw new Error(err.message || "Errore sconosciuto di rete o permessi");
     }
   }
 
@@ -56,7 +57,7 @@ class SupabaseService {
         .select('*');
       if (error) throw error;
       return data;
-    } catch (e) {
+    } catch (e: any) {
       console.error(`Errore fetch ${tableName}:`, e);
       return null;
     }

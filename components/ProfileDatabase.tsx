@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, UploadCloud, DownloadCloud, RefreshCw, LogOut } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, UploadCloud, DownloadCloud, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial } from '../types';
 import { PROFILI as INITIAL_PROFILI } from '../constants';
 import { supabaseService } from '../services/supabaseService';
@@ -57,6 +57,13 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     }
     const savedPan = localStorage.getItem('alea_panel_materials');
     if (savedPan) setPanelMaterials(JSON.parse(savedPan));
+    else {
+      const defaults: PanelMaterial[] = [
+        { id: 'p1', codice: 'LEX2', descr: 'Lexan 2mm', materiale: 'Lexan', spessori: '2, 3', lungDefault: 3050, altDefault: 2050 }
+      ];
+      setPanelMaterials(defaults);
+      localStorage.setItem('alea_panel_materials', JSON.stringify(defaults));
+    }
     
     const savedC = localStorage.getItem('alea_clients');
     if (savedC) setClients(JSON.parse(savedC));
@@ -66,7 +73,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const syncFromCloud = async () => {
     if (!supabaseService.isInitialized()) return;
-    if (!confirm("Vuoi scaricare i dati dal Cloud e sovrascrivere quelli su questo PC?")) return;
+    if (!confirm("Vuoi scaricare i dati dal Cloud? Questo sovrascriverà i dati locali su questo computer.")) return;
     
     setIsSyncing(true);
     try {
@@ -81,9 +88,9 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       
       const com = await supabaseService.fetchTable('commesse');
       if (com) { setCommesse(com); localStorage.setItem('alea_commesse', JSON.stringify(com)); }
-      alert("Dati scaricati con successo!");
-    } catch (e) {
-      alert("Errore durante il download dal Cloud.");
+      alert("Sincronizzazione dal Cloud completata con successo!");
+    } catch (e: any) {
+      alert("Errore durante lo scaricamento: " + e.message);
     } finally {
       setIsSyncing(false);
     }
@@ -91,7 +98,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const pushToCloud = async () => {
     if (!isConnected) return;
-    if (!confirm("ATTENZIONE: Stai per caricare i tuoi dati attuali sul Cloud ALEA SISTEMI. Procedere?")) return;
+    if (!confirm("Stai per inviare i tuoi dati locali sul Cloud ALEA SISTEMI. Sovrascriverai i dati sul server. Procedere?")) return;
     
     setIsSyncing(true);
     try {
@@ -99,31 +106,28 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       if (panelMaterials.length > 0) await supabaseService.syncTable('panel_materials', panelMaterials);
       if (clients.length > 0) await supabaseService.syncTable('clients', clients);
       if (commesse.length > 0) await supabaseService.syncTable('commesse', commesse);
-      alert("Sincronizzazione completata! I dati sono ora sul Cloud.");
-    } catch (e) {
-      alert("Errore durante il caricamento sul Cloud. Verifica permessi database.");
+      alert("Dati caricati sul Cloud con successo!");
+    } catch (e: any) {
+      alert("ERRORE CLOUD: " + e.message + "\n\nSuggerimento: Verifica di aver disabilitato la RLS su Supabase usando il codice SQL nel pannello Setup.");
     } finally {
       setIsSyncing(false);
     }
   };
 
   const handleDisconnect = () => {
-    if (!confirm("Vuoi scollegare Supabase e resettare i parametri di connessione? I dati locali rimarranno intatti.")) return;
+    if (!confirm("Vuoi scollegare il Cloud? L'app tornerà in modalità locale (Default ALEA).")) return;
     supabaseService.disconnect();
     localStorage.removeItem('alea_sb_url');
     localStorage.removeItem('alea_sb_key');
     setSbUrl('');
     setSbKey('');
     setIsConnected(false);
-    alert("Disconnesso con successo.");
+    alert("Cloud scollegato. Modalità locale attiva.");
   };
 
   const handleResetDefaults = () => {
-    if (!confirm("Vuoi resettare i dati locali ai valori di fabbrica ALEA SISTEMI? Perderai profili personalizzati e commesse locali.")) return;
-    localStorage.removeItem('alea_profiles');
-    localStorage.removeItem('alea_panel_materials');
-    localStorage.removeItem('alea_clients');
-    localStorage.removeItem('alea_commesse');
+    if (!confirm("Vuoi resettare COMPLETAMENTE l'app? Perderai tutti i dati locali non salvati nel Cloud.")) return;
+    localStorage.clear();
     window.location.reload();
   };
 
@@ -142,7 +146,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     
     if (isConnected) {
         try { await supabaseService.syncTable(tableName, data); } 
-        catch (e) { console.error("Cloud non raggiungibile"); }
+        catch (e: any) { console.error("Sync Cloud fallito: " + e.message); }
     }
   };
 
@@ -205,15 +209,22 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       localStorage.setItem('alea_sb_url', sbUrl);
       localStorage.setItem('alea_sb_key', sbKey);
       setIsConnected(true);
-      alert("Connessione stabilita correttamente!");
-    } else alert("Parametri non validi.");
+      alert("Connessione Cloud stabilita!");
+    } else alert("Parametri non validi. Controlla l'URL.");
   };
 
-  const sqlCode = `-- SQL ALEA SISTEMI V3.1
-CREATE TABLE profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL, lungMax NUMERIC);
-CREATE TABLE panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL, materiale TEXT, spessori TEXT, lungDefault NUMERIC, altDefault NUMERIC);
-CREATE TABLE clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL, note TEXT, dataAggiunta TIMESTAMPTZ DEFAULT now());
-CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT NOT NULL, data TIMESTAMPTZ DEFAULT now(), tipo TEXT NOT NULL, dettagli JSONB);`;
+  const sqlCode = `-- SQL ALEA SISTEMI V4.0 (ESEMPIO PRONTO ALL'USO)
+-- 1. Crea tabelle
+CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL, lungMax NUMERIC);
+CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL, materiale TEXT, spessori TEXT, lungDefault NUMERIC, altDefault NUMERIC);
+CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL, note TEXT, dataAggiunta TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT NOT NULL, data TIMESTAMPTZ DEFAULT now(), tipo TEXT NOT NULL, dettagli JSONB);
+
+-- 2. DISABILITA RLS (Cruciale per evitare l'errore permessi)
+ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE panel_materials DISABLE ROW LEVEL SECURITY;
+ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -225,7 +236,7 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
             <div className="flex items-center gap-2 mt-0.5">
                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                 {isConnected ? (isSyncing ? 'Sincronizzazione...' : 'Cloud Attivo') : 'Solo Archivio Locale'}
+                 {isConnected ? (isSyncing ? 'Sincronizzazione...' : 'Cloud Attivo') : 'Archivio Locale'}
                </span>
             </div>
           </div>
@@ -234,12 +245,12 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
         {isConnected && (
             <div className="flex gap-2">
                 <button onClick={syncFromCloud} disabled={isSyncing} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-[10px] font-black uppercase px-4 py-2 rounded-xl transition-all disabled:opacity-50">
-                    <DownloadCloud className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>Scarica dal Cloud</span>
+                    <DownloadCloud className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <span>Download dal Cloud</span>
                 </button>
                 <button onClick={pushToCloud} disabled={isSyncing} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-lg transition-all disabled:opacity-50">
                     <UploadCloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
-                    <span>Carica nel Cloud</span>
+                    <span>Upload sul Cloud</span>
                 </button>
             </div>
         )}
@@ -263,30 +274,29 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
             <div className="max-w-4xl mx-auto space-y-12 py-10">
                <div className="text-center space-y-4">
                   <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Sincronizzazione Centrale</span></div>
-                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Condivisione ALEA SISTEMI</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega Supabase per sincronizzare i dati tra i diversi reparti aziendali.</p>
+                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Connessione Supabase</h3>
+                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Usa questo pannello per collegare il tuo database. Se riscontri errori di caricamento, assicurati di aver eseguito il codice SQL qui sotto per disabilitare la RLS.</p>
                </div>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                  <div className="bg-slate-900 p-8 rounded-[3rem] text-white space-y-6 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-10"><CloudSync className="w-32 h-32" /></div>
+                  <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
                     <div className="relative z-10 space-y-6">
                       <div className="space-y-4">
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Project URL</label>
-                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://xyz.supabase.co" className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
+                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
                         </div>
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Anon Key</label>
-                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Incolla chiave..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-blue-300" />
+                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Chiave segreta..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={handleConnectSupabase} className="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95">
+                        <button onClick={handleConnectSupabase} className="bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3">
                           {isConnected ? <CheckCircle2 className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
-                          <span>{isConnected ? 'ATTIVO' : 'COLLEGA'}</span>
+                          <span>{isConnected ? 'COLLEGATO' : 'COLLEGA'}</span>
                         </button>
-                        <button onClick={handleDisconnect} disabled={!isConnected} className="bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
+                        <button onClick={handleDisconnect} disabled={!isConnected} className="bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-30">
                           <LogOut className="w-6 h-6" />
                           <span>SCOLLEGA</span>
                         </button>
@@ -300,11 +310,15 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Codice SQL per Database</span>
                         <button onClick={() => { navigator.clipboard.writeText(sqlCode); alert("SQL Copiato!"); }} className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"><Copy className="w-3 h-3" /> COPIA SQL</button>
                       </div>
+                      <div className="flex items-start gap-2 bg-yellow-50 p-2 rounded-lg border border-yellow-100 mb-2">
+                         <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
+                         <p className="text-[8px] text-yellow-800 font-bold uppercase">Importante: Esegui questo codice per evitare errori di permessi!</p>
+                      </div>
                       <pre className="text-[9px] font-mono text-slate-500 bg-white p-4 rounded-xl border border-slate-100 overflow-x-auto h-32">{sqlCode}</pre>
                     </div>
                     
                     <button onClick={handleResetDefaults} className="w-full flex items-center justify-center gap-3 bg-red-50 hover:bg-red-100 text-red-600 font-black py-4 rounded-[1.5rem] border border-red-200 transition-all text-xs uppercase tracking-widest">
-                        <RefreshCw className="w-4 h-4" /> Ripristina Default di Fabbrica
+                        <RefreshCw className="w-4 h-4" /> Reset Totale App
                     </button>
                   </div>
                </div>
@@ -313,19 +327,19 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
             <>
               <div className="flex flex-col md:flex-row gap-4 items-center">
                 <div className="relative flex-1 w-full"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" /><input type="text" placeholder={`Cerca in ${activeTab}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none transition-all font-bold text-slate-700" /></div>
-                {!isAdding && activeTab !== 'commesse' && (<button onClick={() => { setIsAdding(true); setIsEditing(false); setEditingId(null); }} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl shadow-xl shadow-red-100 font-black flex items-center justify-center gap-3 active:scale-95 transition-all"><Plus className="w-6 h-6" /><span>AGGIUNGI {activeTab.toUpperCase()}</span></button>)}
+                {!isAdding && activeTab !== 'commesse' && (<button onClick={() => { setIsAdding(true); setIsEditing(false); setEditingId(null); }} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl shadow-xl shadow-red-100 font-black flex items-center justify-center gap-3 transition-all"><Plus className="w-6 h-6" /><span>AGGIUNGI</span></button>)}
               </div>
               
               {isAdding && (
                 <div className="p-8 rounded-[2rem] border-2 border-dashed border-red-200 bg-slate-50/50 animate-in zoom-in-95 duration-200">
-                   <div className="flex justify-between items-center mb-6"><h4 className="font-black uppercase tracking-widest text-sm text-slate-500">{isEditing ? 'MODIFICA' : 'NUOVO'} ALEA SISTEMI</h4><button onClick={() => { setIsAdding(false); setIsEditing(false); setEditingId(null); }} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5" /></button></div>
+                   <div className="flex justify-between items-center mb-6"><h4 className="font-black uppercase tracking-widest text-sm text-slate-500">{isEditing ? 'MODIFICA' : 'NUOVO'} ELEMENTO</h4><button onClick={() => { setIsAdding(false); setIsEditing(false); setEditingId(null); }} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5" /></button></div>
                    
                    {activeTab === 'profili' && (
                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Codice</label><input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black" /></div>
                         <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Descrizione</label><input type="text" value={profileForm.descr} onChange={e=>setProfileForm({...profileForm, descr: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-bold" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Std (mm)</label><input type="number" value={profileForm.lungMax || 6000} onChange={e=>setProfileForm({...profileForm, lungMax: parseFloat(e.target.value)})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black text-red-600" /></div>
-                        <div className="flex items-end"><button onClick={handleSaveProfile} className="w-full bg-red-600 text-white font-black py-3.5 rounded-xl shadow-lg">{isEditing ? 'MODIFICA' : 'SALVA'}</button></div>
+                        <div className="flex items-end"><button onClick={handleSaveProfile} className="w-full bg-red-600 text-white font-black py-3.5 rounded-xl shadow-lg">{isEditing ? 'AGGIORNA' : 'SALVA'}</button></div>
                      </div>
                    )}
 
@@ -334,10 +348,10 @@ CREATE TABLE commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT N
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Cod. Lastra</label><input type="text" value={panelForm.codice} onChange={e=>setPanelForm({...panelForm, codice: e.target.value.toUpperCase()})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Descrizione</label><input type="text" value={panelForm.descr} onChange={e=>setPanelForm({...panelForm, descr: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-bold" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Materiale</label><input type="text" value={panelForm.materiale} onChange={e=>setPanelForm({...panelForm, materiale: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-bold" /></div>
-                        <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Spessori (es: 2, 3, 5)</label><input type="text" value={panelForm.spessori} onChange={e=>setPanelForm({...panelForm, spessori: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-mono text-xs" /></div>
+                        <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Spessori</label><input type="text" value={panelForm.spessori} onChange={e=>setPanelForm({...panelForm, spessori: e.target.value})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-mono text-xs" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Std (mm)</label><input type="number" value={panelForm.lungDefault} onChange={e=>setPanelForm({...panelForm, lungDefault: parseFloat(e.target.value)})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">A. Std (mm)</label><input type="number" value={panelForm.altDefault} onChange={e=>setPanelForm({...panelForm, altDefault: parseFloat(e.target.value)})} className="w-full px-5 py-3 rounded-xl border border-slate-200 font-black" /></div>
-                        <div className="md:col-span-2 flex items-end"><button onClick={handleSavePanel} className="w-full bg-red-600 text-white font-black py-3.5 rounded-xl shadow-lg">{isEditing ? 'MODIFICA' : 'SALVA'}</button></div>
+                        <div className="md:col-span-2 flex items-end"><button onClick={handleSavePanel} className="w-full bg-red-600 text-white font-black py-3.5 rounded-xl shadow-lg">{isEditing ? 'AGGIORNA' : 'SALVA'}</button></div>
                      </div>
                    )}
                 </div>
