@@ -4,6 +4,7 @@ import { Plus, Play, Download, Trash2, Layout, Maximize, Settings, FileText, Squ
 import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
+import { supabaseService } from '../services/supabaseService';
 
 const COLORI_MATERIALE: Record<string, string> = { "Lexan": "#f87171", "Dibond": "#60a5fa", "Alveolare": "#4ade80", "Pvc": "#fbbf24", "Vetro": "#94a3b8" };
 
@@ -79,10 +80,11 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     setQuantita(1);
   };
 
-  const saveCommessaToDb = () => {
+  const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
+    
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
       numero: commessa || 'Senza Nome',
@@ -91,8 +93,21 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       tipo: 'pannelli',
       dettagli: { distinta, results }
     };
-    localStorage.setItem('alea_commesse', JSON.stringify([nuovaCommessa, ...commesse]));
-    alert("Commessa ALEA SISTEMI salvata!");
+    
+    const updatedCommesse = [nuovaCommessa, ...commesse];
+    localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
+    
+    if (supabaseService.isInitialized()) {
+        try {
+            await supabaseService.syncTable('commesse', updatedCommesse);
+            alert("Commessa archiviata con successo in locale e nel Cloud!");
+        } catch (e) {
+            console.error(e);
+            alert("Archiviata in locale, ma sincronizzazione Cloud fallita.");
+        }
+    } else {
+        alert("Commessa archiviata con successo nell'archivio locale!");
+    }
   };
 
   const runOptimization = () => {
@@ -152,8 +167,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
         <section className="bg-white p-6 rounded-[2rem] border border-gray-200 shadow-xl">
            <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2 uppercase tracking-tighter"><FileText className="w-5 h-5 text-red-600" /><span>Testata Commessa</span></h3>
            <div className="space-y-4">
-              <input type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Ragione Sociale Cliente..." />
-              <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Riferimento Commessa..." />
+              <input type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Nome Cliente..." />
+              <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Numero Commessa..." />
            </div>
            
            <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2 border-t pt-6 mt-6 uppercase tracking-tighter"><Square className="w-5 h-5 text-blue-600" /><span>Dati Lastra Grezza</span></h3>

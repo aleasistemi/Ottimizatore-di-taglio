@@ -4,6 +4,7 @@ import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, 
 import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
+import { supabaseService } from '../services/supabaseService';
 
 interface BarOptimizerProps {
   externalData?: CommessaArchiviata | null;
@@ -87,10 +88,11 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     exportService.toCsv(results, groupBars);
   };
 
-  const saveCommessaToDb = () => {
+  const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
+    
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
       numero: commessa || 'Senza Nome',
@@ -99,8 +101,21 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       tipo: 'barre',
       dettagli: { distinta, results }
     };
-    localStorage.setItem('alea_commesse', JSON.stringify([nuovaCommessa, ...commesse]));
-    alert("Commessa salvata con successo!");
+    
+    const updatedCommesse = [nuovaCommessa, ...commesse];
+    localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
+    
+    if (supabaseService.isInitialized()) {
+        try {
+            await supabaseService.syncTable('commesse', updatedCommesse);
+            alert("Commessa salvata in locale e sincronizzata nel Cloud!");
+        } catch (e) {
+            console.error(e);
+            alert("Commessa salvata in locale, errore sincro Cloud.");
+        }
+    } else {
+        alert("Commessa archiviata con successo nell'archivio locale!");
+    }
   };
 
   const removeCut = (id: string) => setDistinta(prev => prev.filter(c => c.id !== id));
@@ -149,7 +164,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
             <div className="space-y-5">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Cliente</label>
-                <input list="clients-list" type="text" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Seleziona o scrivi..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" />
+                <input list="clients-list" type="text" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nome Cliente..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" />
                 <datalist id="clients-list">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
               </div>
               <div>
@@ -243,7 +258,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
             <div className="p-5 border-b flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center space-x-4">
                  <h3 className="font-black text-slate-800 uppercase text-xs tracking-tight">Distinta Attuale</h3>
-                 <button onClick={saveCommessaToDb} className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase hover:bg-blue-50 px-3 py-1 rounded-full border border-blue-100 transition-all"><Save className="w-3 h-3" /> Salva in Archivio</button>
+                 <button onClick={saveCommessaToDb} className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase hover:bg-blue-50 px-3 py-1 rounded-full border border-blue-100 transition-all"><Save className="w-3 h-3" /> Archivia</button>
               </div>
               <button onClick={() => {setDistinta([]); setResults(null);}} className="text-[10px] font-black text-slate-400 hover:text-red-600 uppercase tracking-widest transition-colors">Svuota</button>
             </div>

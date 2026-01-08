@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, CloudUpload, CloudDownload, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Users, Briefcase, CloudSync, Globe, Settings, CheckCircle2, ShieldCheck, Copy, Square, CloudUpload, CloudDownload, RefreshCw, LogOut, AlertCircle, Info } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial } from '../types';
 import { PROFILI as INITIAL_PROFILI } from '../constants';
 import { supabaseService } from '../services/supabaseService';
@@ -98,7 +98,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const pushToCloud = async () => {
     if (!isConnected) return;
-    if (!confirm("Caricare i dati locali sul Cloud? Se mancano colonne (es. lungMax), assicurati di aver eseguito il nuovo script SQL.")) return;
+    if (!confirm("Caricare i dati locali sul Cloud? Se mancano colonne, assicurati di aver eseguito il nuovo script SQL.")) return;
     
     setIsSyncing(true);
     try {
@@ -108,7 +108,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       if (commesse.length > 0) await supabaseService.syncTable('commesse', commesse);
       alert("Caricamento Cloud completato con successo!");
     } catch (e: any) {
-      alert("ERRORE SCHEΜΑ CLOUD: " + e.message + "\n\nIl database non riconosce alcune colonne. Per favore, copia ed esegui il NUOVO script SQL dal pannello Setup.");
+      alert("ERRORE SCHEΜΑ CLOUD: " + e.message + "\n\nAssicurati di aver eseguito il codice SQL dal pannello Setup.");
     } finally {
       setIsSyncing(false);
     }
@@ -209,18 +209,18 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
       localStorage.setItem('alea_sb_url', sbUrl);
       localStorage.setItem('alea_sb_key', sbKey);
       setIsConnected(true);
-      alert("Collegato!");
-    } else alert("URL non valido.");
+      alert("Collegato con successo al Cloud ALEA SISTEMI!");
+    } else alert("Parametri non validi. Controlla l'URL del progetto.");
   };
 
-  const sqlCode = `-- SQL ALEA SISTEMI V4.1 (MIGRAZIONE SICURA)
+  const sqlCode = `-- SQL ALEA SISTEMI V4.2 (MIGRAZIONE SICURA)
 -- 1. Crea tabelle se non esistono
 CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT NOT NULL, cliente TEXT NOT NULL, tipo TEXT NOT NULL);
 
--- 2. Aggiunge colonne mancanti (MOLTO IMPORTANTE)
+-- 2. Aggiunge colonne mancanti
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS "lungMax" NUMERIC;
 ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS materiale TEXT;
 ALTER TABLE panel_materials ADD COLUMN IF NOT EXISTS spessori TEXT;
@@ -231,7 +231,7 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS "dataAggiunta" TIMESTAMPTZ DEFAULT 
 ALTER TABLE commesse ADD COLUMN IF NOT EXISTS data TIMESTAMPTZ DEFAULT now();
 ALTER TABLE commesse ADD COLUMN IF NOT EXISTS dettagli JSONB;
 
--- 3. Disabilita RLS
+-- 3. Disabilita RLS per accesso libero tra reparti
 ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE panel_materials DISABLE ROW LEVEL SECURITY;
 ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
@@ -285,21 +285,31 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
             <div className="max-w-4xl mx-auto space-y-12 py-10">
                <div className="text-center space-y-4">
                   <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-100"><Globe className="w-5 h-5 text-blue-600" /><span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Sincronizzazione Centrale</span></div>
-                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Condivisione ALEA SISTEMI</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Collega Supabase per sincronizzare i dati. Se vedi errori di caricamento, esegui il NUOVO script SQL qui sotto.</p>
+                  <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Collegamento Supabase</h3>
+                  <p className="text-slate-500 max-w-xl mx-auto leading-relaxed italic">Segui le istruzioni qui sotto per collegare correttamente l'app al database aziendale.</p>
                </div>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
                     <div className="relative z-10 space-y-6">
+                      <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                        <h4 className="flex items-center gap-2 text-xs font-black uppercase text-blue-400 mb-3"><Info className="w-4 h-4" /> Dove trovare i dati:</h4>
+                        <ol className="text-[11px] space-y-2 text-slate-300 list-decimal pl-4 font-bold">
+                          <li>Accedi a Supabase e vai in <span className="text-white">Project Settings</span>.</li>
+                          <li>Clicca su <span className="text-white">Data API</span> per copiare l'<span className="text-blue-400">URL del Progetto</span>.</li>
+                          <li>Clicca su <span className="text-white">API</span> per trovare le <span className="text-white">Project API Keys</span>.</li>
+                          <li>Copia la chiave di tipo <span className="text-red-400">anon / public</span>.</li>
+                        </ol>
+                      </div>
+                      
                       <div className="space-y-4">
                         <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Project URL</label>
-                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Project URL (da Data API)</label>
+                          <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://xyz.supabase.co" className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Anon Key</label>
-                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Chiave..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Anon Key (da API Keys)</label>
+                          <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="Chiave anonima..." className="w-full px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 font-mono text-xs text-blue-300" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
@@ -318,17 +328,17 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                   <div className="space-y-4">
                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Script SQL di Migrazione</span>
-                        <button onClick={() => { navigator.clipboard.writeText(sqlCode); alert("Copiato!"); }} className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"><Copy className="w-3 h-3" /> COPIA SQL</button>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Script SQL per Database</span>
+                        <button onClick={() => { navigator.clipboard.writeText(sqlCode); alert("SQL Copiato!"); }} className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-all"><Copy className="w-3 h-3" /> COPIA SQL</button>
                       </div>
                       <div className="flex items-start gap-2 bg-yellow-50 p-2 rounded-lg border border-yellow-100 mb-2">
                          <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
-                         <p className="text-[8px] text-yellow-800 font-bold uppercase">Nota: Esegui questo script se avevi già tabelle vecchie.</p>
+                         <p className="text-[8px] text-yellow-800 font-bold uppercase">Nota: Esegui questo script se riscontri errori di permessi.</p>
                       </div>
                       <pre className="text-[9px] font-mono text-slate-500 bg-white p-4 rounded-xl border border-slate-100 overflow-x-auto h-32">{sqlCode}</pre>
                     </div>
                     <button onClick={handleResetDefaults} className="w-full flex items-center justify-center gap-3 bg-red-50 hover:bg-red-100 text-red-600 font-black py-4 rounded-[1.5rem] border border-red-200 transition-all text-xs uppercase tracking-widest">
-                        <RefreshCw className="w-4 h-4" /> Reset Totale Locale
+                        <RefreshCw className="w-4 h-4" /> Reset Totale App
                     </button>
                   </div>
                </div>
