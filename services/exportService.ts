@@ -77,19 +77,19 @@ export const exportService = {
           doc.setFillColor(rgb[0], rgb[1], rgb[2]);
           doc.rect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale, 'FD');
           
-          // Etichette Leggibili: Sfondo Bianco + Testo Nero
-          if (p.w * scale > 12 && p.h * scale > 8) {
+          if (p.w * scale > 15 && p.h * scale > 10) {
             const label = `${p.w}x${p.h}`;
-            doc.setFontSize(7);
+            doc.setFontSize(8);
             doc.setFont("helvetica", "bold");
             const txtWidth = doc.getTextWidth(label);
             const centerX = offsetX + (p.x + p.w / 2) * scale;
             const centerY = offsetY + (p.y + p.h / 2) * scale;
             
+            // Sfondo bianco protettivo
             doc.setFillColor(255, 255, 255);
-            doc.rect(centerX - (txtWidth/2 + 1), centerY - 2.5, txtWidth + 2, 4.5, 'F');
+            doc.rect(centerX - (txtWidth/2 + 2), centerY - 3, txtWidth + 4, 6, 'F');
             doc.setTextColor(0);
-            doc.text(label, centerX, centerY + 0.8, { align: 'center' });
+            doc.text(label, centerX, centerY + 1, { align: 'center' });
           }
         });
 
