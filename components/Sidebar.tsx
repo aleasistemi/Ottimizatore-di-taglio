@@ -1,14 +1,15 @@
 
 import React from 'react';
-import { Scissors, Square, Settings, Database, List } from 'lucide-react';
+import { Scissors, Square, Settings, Database, Cloud } from 'lucide-react';
 import { OptimizerMode } from '../types';
 
 interface SidebarProps {
   activeMode: OptimizerMode;
   onModeChange: (mode: OptimizerMode) => void;
+  onOpenSettings: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange, onOpenSettings }) => {
   const navItems = [
     { id: OptimizerMode.BARRE, icon: Scissors, label: 'Taglio Barre', desc: 'Profili Alluminio' },
     { id: OptimizerMode.PANNELLI, icon: Square, label: 'Taglio Pannelli', desc: 'Lastre & Vetri' },
@@ -24,7 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange }) =>
           </div>
           <div>
             <h2 className="font-black text-2xl leading-none tracking-tighter">ALEA</h2>
-            <p className="text-[9px] text-slate-500 tracking-[0.2em] uppercase mt-1 font-bold">Sistemi Pro</p>
+            <p className="text-[9px] text-slate-500 tracking-[0.2em] uppercase mt-1 font-bold whitespace-nowrap">SISTEMI PRO</p>
           </div>
         </div>
 
@@ -50,17 +51,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange }) =>
               </button>
             );
           })}
+          
+          <div className="pt-4 border-t border-slate-800 mt-4">
+            <button
+              onClick={onOpenSettings}
+              className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 group text-slate-400 hover:bg-slate-800 hover:text-slate-200`}
+            >
+              <Settings className="w-5 h-5 text-slate-500 group-hover:scale-110 group-hover:rotate-45 transition-all" />
+              <div className="text-left">
+                <div className="text-xs font-black uppercase tracking-tight">Impostazioni Cloud</div>
+                <div className="text-[9px] font-bold text-slate-600">Configura BYODB</div>
+              </div>
+            </button>
+          </div>
         </nav>
       </div>
 
       <div className="mt-auto p-6 space-y-4">
         <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
           <div className="flex items-center space-x-2 text-[9px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">
-            <Settings className="w-3.5 h-3.5" />
-            <span>Info Sistema</span>
+            <Cloud className="w-3.5 h-3.5" />
+            <span>ALEA SISTEMI Cloud</span>
           </div>
-          <div className="text-[10px] font-bold text-slate-300">Ottimizzatore V2.5</div>
-          <div className="text-[9px] text-slate-500 mt-0.5 tracking-tight">Ultimo aggiornamento: Oggi</div>
+          <div className="text-[10px] font-bold text-slate-300">Ottimizzatore V2.6</div>
+          <div className="text-[9px] text-slate-500 mt-0.5 tracking-tight">Eccellenza nel taglio.</div>
         </div>
       </div>
     </aside>
