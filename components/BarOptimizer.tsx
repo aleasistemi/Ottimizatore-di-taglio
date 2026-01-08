@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Play, Download, Trash2, FileText, Settings, RotateCcw, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RefreshCcw } from 'lucide-react';
+import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
@@ -77,15 +77,18 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     setQuantita(1);
   };
 
+  const handleExportPdf = () => {
+    if (!results) return;
+    exportService.toPdf(results, cliente, commessa, groupBars);
+  };
+
+  const handleExportCsv = () => {
+    if (!results) return;
+    exportService.toCsv(results, groupBars);
+  };
+
   const saveCommessaToDb = () => {
     if (distinta.length === 0) return;
-    if (cliente.trim()) {
-      const savedClients = JSON.parse(localStorage.getItem('alea_clients') || '[]');
-      if (!savedClients.find((c: any) => c.nome.toLowerCase() === cliente.toLowerCase())) {
-        const nuovoCliente = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
-        localStorage.setItem('alea_clients', JSON.stringify([nuovoCliente, ...savedClients]));
-      }
-    }
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
     const nuovaCommessa: CommessaArchiviata = {
@@ -132,19 +135,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       });
     });
     return Object.values(summary).sort((a, b) => b.lung - a.lung);
-  };
-
-  // Fix: Added handleExportPdf and handleExportCsv functions to resolve "Cannot find name" errors.
-  const handleExportPdf = () => {
-    if (results) {
-      exportService.toPdf(results, cliente, commessa, groupBars);
-    }
-  };
-
-  const handleExportCsv = () => {
-    if (results) {
-      exportService.toCsv(results, groupBars);
-    }
   };
 
   return (
@@ -200,8 +190,8 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
                 <div>
                    <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase block">Angoli</label>
-                      <button onClick={resetAngles} title="Reset 90/90" className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                        <RotateCcw className="w-3.5 h-3.5" />
+                      <button onClick={resetAngles} title="Reset 90/90" className="flex items-center gap-1 text-[9px] font-black text-red-500 hover:bg-red-50 px-2 py-0.5 rounded transition-all">
+                        <RotateCcw className="w-3 h-3" /> RESET
                       </button>
                    </div>
                    <div className="flex items-center space-x-1">
