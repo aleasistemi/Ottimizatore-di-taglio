@@ -17,36 +17,33 @@ class SupabaseService {
     return false;
   }
 
-  disconnect() {
-    this.client = null;
-  }
-
   isInitialized(): boolean {
     return this.client !== null;
   }
 
   async syncTable(tableName: string, data: any[]) {
-    if (!this.client) throw new Error("Client non inizializzato");
+    if (!this.client) return;
     try {
-      // Upsert gestisce sia inserimento che aggiornamento
       const { error } = await this.client
         .from(tableName)
         .upsert(data, { onConflict: tableName === 'profiles' ? 'codice' : 'id' });
-      
       if (error) throw error;
     } catch (err: any) {
       console.error(`Errore sync ${tableName}:`, err);
-      throw new Error(err.message || "Errore sconosciuto di rete o permessi");
     }
   }
 
   async deleteFromTable(tableName: string, id: string, idColumn: string = 'id') {
     if (!this.client) return;
-    const { error } = await this.client
-      .from(tableName)
-      .delete()
-      .eq(idColumn, id);
-    if (error) console.error(`Errore delete ${tableName}:`, error);
+    try {
+      const { error } = await this.client
+        .from(tableName)
+        .delete()
+        .eq(idColumn, id);
+      if (error) throw error;
+    } catch (err) {
+      console.error(`Errore delete cloud ${tableName}:`, err);
+    }
   }
 
   async fetchTable(tableName: string) {
@@ -58,7 +55,6 @@ class SupabaseService {
       if (error) throw error;
       return data;
     } catch (e: any) {
-      console.error(`Errore fetch ${tableName}:`, e);
       return null;
     }
   }
