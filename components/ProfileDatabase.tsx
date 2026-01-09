@@ -46,15 +46,19 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', clienti: 'alea_clients', commesse: 'alea_commesse', colori: 'alea_colors' };
     const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', clienti: 'clients', commesse: 'commesse', colori: 'colors' };
     
-    // IMPORTANTE: Segnala la mutazione PRIMA di salvare per bloccare la sincronizzazione dal cloud in App.tsx
+    // 1. BLOCCO IMMEDIATO: Diciamo ad App.tsx di non sincronizzare dal cloud per un po'
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
 
-    // Salva localmente
+    // 2. SALVATAGGIO LOCALE: Aggiorniamo subito il magazzino locale
     localStorage.setItem(keys[type], JSON.stringify(data));
     
-    // Sincronizza Cloud
+    // 3. SINCRONIZZAZIONE CLOUD
     if (supabaseService.isInitialized()) {
-      await supabaseService.syncTable(tables[type], data);
+      try {
+        await supabaseService.syncTable(tables[type], data);
+      } catch (e) {
+        console.error("Errore caricamento cloud:", e);
+      }
     }
     
     loadLocalData();
@@ -69,10 +73,15 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const handleSavePanel = async () => {
     if (!panelForm.codice) return;
-    const id = panelForm.id || `PAN_${Date.now()}`;
-    const updated = [{ ...panelForm, id }, ...panelMaterials.filter(p => p.id !== id)];
+    // Generiamo un ID univoco robusto se è un nuovo inserimento
+    const id = panelForm.id || `PAN_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const newPanel = { ...panelForm, id };
+    const updated = [newPanel, ...panelMaterials.filter(p => p.id !== id)];
+    
     await saveToDb('pannelli', updated);
-    setIsAdding(false); setPanelForm({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
+    
+    setIsAdding(false); 
+    setPanelForm({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
   };
 
   const handleSaveColor = async () => {

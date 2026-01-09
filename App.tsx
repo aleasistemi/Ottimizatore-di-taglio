@@ -21,8 +21,8 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // PROTEZIONE: Aumentata a 30 secondi per dare tempo al cloud lento di processare l'upsert
-    // prima di tentare un fetch che potrebbe restituire dati vecchi e cancellare quelli nuovi.
+    // PROTEZIONE: Se c'è stata una modifica locale negli ultimi 30 secondi, NON scaricare nulla dal cloud.
+    // Questo previene che il fetch (magari lento) sovrascriva il dato appena inserito.
     if (!isManual && Date.now() - lastMutationTimeRef.current < 30000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
@@ -42,9 +42,17 @@ const App: React.FC = () => {
       for (const table of tables) {
         const cloudData = await supabaseService.fetchTable(table);
         if (cloudData) {
-          const localData = localStorage.getItem(storageKeys[table]);
-          const cloudDataStr = JSON.stringify(cloudData);
-          if (localData !== cloudDataStr) {
+          // Rimuoviamo metadati di Supabase per il confronto (created_at, etc)
+          const cleanCloudData = cloudData.map(({ created_at, ...rest }: any) => rest);
+          const localData = JSON.parse(localStorage.getItem(storageKeys[table]) || '[]');
+          
+          const cloudDataStr = JSON.stringify(cleanCloudData);
+          const localDataStr = JSON.stringify(localData);
+
+          if (cloudDataStr !== localDataStr) {
+            // Se il cloud è vuoto ma il locale no, e non siamo in manuale, siamo prudenti
+            if (cleanCloudData.length === 0 && localData.length > 0 && !isManual) continue;
+            
             localStorage.setItem(storageKeys[table], cloudDataStr);
             changed = true;
           }
@@ -137,4 +145,5 @@ const App: React.FC = () => {
   );
 };
 
+// Fix: Added default export to allow App to be imported in index.tsx
 export default App;
