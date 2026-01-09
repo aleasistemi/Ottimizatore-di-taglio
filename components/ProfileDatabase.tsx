@@ -17,6 +17,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const [activeTab, setActiveTab] = useState<DbTab>(forcedTab || 'profili');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('alea_sb_url') || '');
   const [sbKey, setSbKey] = useState(localStorage.getItem('alea_sb_key') || '');
@@ -76,6 +77,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     setActiveTab(tab);
     if (onTabChange) onTabChange(tab);
     setIsAdding(false);
+    setIsEditing(false);
     loadLocalData();
   };
 
@@ -115,11 +117,17 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   };
 
   const saveToDbAndCloud = async (type: DbTab, data: any[]) => {
+    // Comunica ad App.tsx che abbiamo fatto una modifica locale, per bloccare la sync in entrata temporaneamente
+    window.dispatchEvent(new CustomEvent('alea_local_mutation'));
+    
     const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', clienti: 'alea_clients', commesse: 'alea_commesse' };
     const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', clienti: 'clients', commesse: 'commesse' };
+    
     localStorage.setItem(keys[type], JSON.stringify(data));
     if (isConnected) {
-        try { await supabaseService.syncTable(tables[type], data); } catch (e) {}
+        try { await supabaseService.syncTable(tables[type], data); } catch (e) {
+          console.error("Errore sync cloud:", e);
+        }
     }
     loadLocalData();
   };
@@ -139,11 +147,19 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     if (isConnected) await supabaseService.deleteFromTable(tables[type], id, idCols[type]);
   };
 
+  const editItem = (type: DbTab, item: any) => {
+    setIsEditing(true);
+    setIsAdding(true);
+    if (type === 'profili') setProfileForm(item);
+    if (type === 'pannelli') setPanelForm(item);
+    if (type === 'clienti') setClientForm(item);
+  };
+
   const handleSaveProfile = async () => {
     if (!profileForm.codice) return;
     const updated = [profileForm, ...profiles.filter(p => p.codice !== profileForm.codice)];
     await saveToDbAndCloud('profili', updated);
-    setIsAdding(false); setProfileForm({ codice: '', descr: '', lungMax: 6000 });
+    setIsAdding(false); setIsEditing(false); setProfileForm({ codice: '', descr: '', lungMax: 6000 });
   };
 
   const handleSavePanelMaterial = async () => {
@@ -151,7 +167,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     const newId = panelForm.id || Math.random().toString(36).substr(2, 9);
     const updated = [{ ...panelForm, id: newId }, ...panelMaterials.filter(p => p.id !== newId)];
     await saveToDbAndCloud('pannelli', updated);
-    setIsAdding(false); setPanelForm({ id: '', codice: '', descr: '', materiale: 'Lexan', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
+    setIsAdding(false); setIsEditing(false); setPanelForm({ id: '', codice: '', descr: '', materiale: 'Lexan', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
   };
 
   const handleSaveClient = async () => {
@@ -159,7 +175,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     const newId = clientForm.id || Math.random().toString(36).substr(2, 9);
     const updated = [{ ...clientForm, id: newId }, ...clients.filter(c => c.id !== newId)];
     await saveToDbAndCloud('clienti', updated);
-    setIsAdding(false); setClientForm({ id: '', nome: '', note: '', dataAggiunta: new Date().toISOString() });
+    setIsAdding(false); setIsEditing(false); setClientForm({ id: '', nome: '', note: '', dataAggiunta: new Date().toISOString() });
   };
 
   const sqlCode = `-- SQL ALEA SISTEMI V4.6
@@ -183,7 +199,7 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
             <div className="flex items-center gap-3 mt-1">
                <div className="flex items-center gap-2">
                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
-                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{isConnected ? 'Cloud Sincronizzato' : 'Archivio Locale'}</span>
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{isConnected ? 'Sincronizzazione Cloud Attiva' : 'Archivio Locale'}</span>
                </div>
             </div>
           </div>
@@ -248,7 +264,7 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
               <div className="flex flex-col md:flex-row gap-4 items-center">
                 <div className="relative flex-1 w-full"><Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6" /><input type="text" placeholder={`Cerca in ${activeTab}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-200 rounded-3xl outline-none font-bold" /></div>
                 {!isAdding && activeTab !== 'commesse' && (
-                  <button onClick={() => setIsAdding(true)} className="w-full md:w-auto bg-red-600 text-white px-10 py-5 rounded-3xl shadow-xl font-black flex items-center justify-center gap-3">
+                  <button onClick={() => { setIsAdding(true); setIsEditing(false); }} className="w-full md:w-auto bg-red-600 text-white px-10 py-5 rounded-3xl shadow-xl font-black flex items-center justify-center gap-3">
                     <Plus className="w-6 h-6" /> AGGIUNGI
                   </button>
                 )}
@@ -256,11 +272,13 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
 
               {isAdding && (
                 <div className="p-8 rounded-[2.5rem] border-2 border-dashed border-red-200 bg-slate-50/50 animate-in zoom-in-95 duration-200">
+                   <h4 className="text-xs font-black uppercase text-red-600 mb-4 tracking-widest">{isEditing ? 'MODIFICA ELEMENTO' : 'NUOVO ELEMENTO'}</h4>
                    {activeTab === 'profili' && (
                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="md:col-span-1"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Codice</label><input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-black" /></div>
+                        <div className="md:col-span-1"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Codice</label><input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} disabled={isEditing} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-black disabled:bg-slate-100" /></div>
                         <div className="md:col-span-2"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Descrizione</label><input type="text" value={profileForm.descr} onChange={e=>setProfileForm({...profileForm, descr: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-bold" /></div>
-                        <div className="flex items-end gap-2"><button onClick={handleSaveProfile} className="flex-1 bg-red-600 text-white font-black py-3 rounded-xl">SALVA</button><button onClick={()=>setIsAdding(false)} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
+                        <div className="md:col-span-1"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Lunghezza Std (mm)</label><input type="number" value={profileForm.lungMax || ''} onChange={e=>setProfileForm({...profileForm, lungMax: parseInt(e.target.value) || 6000})} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-bold" /></div>
+                        <div className="md:col-span-4 flex justify-end gap-2 pt-2"><button onClick={handleSaveProfile} className="bg-red-600 text-white font-black px-10 py-3 rounded-xl">SALVA</button><button onClick={()=>{setIsAdding(false); setIsEditing(false);}} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
                      </div>
                    )}
                    {activeTab === 'pannelli' && (
@@ -276,14 +294,14 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                              <span className="text-[10px] font-bold uppercase text-slate-500">SÌ</span>
                           </label>
                         </div>
-                        <div className="flex items-end gap-2"><button onClick={handleSavePanelMaterial} className="flex-1 bg-red-600 text-white font-black py-3 rounded-xl">SALVA</button><button onClick={()=>setIsAdding(false)} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
+                        <div className="flex items-end gap-2"><button onClick={handleSavePanelMaterial} className="flex-1 bg-red-600 text-white font-black py-3 rounded-xl">SALVA</button><button onClick={()=>{setIsAdding(false); setIsEditing(false);}} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
                      </div>
                    )}
                    {activeTab === 'clienti' && (
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="md:col-span-1"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Ragione Sociale</label><input type="text" value={clientForm.nome} onChange={e=>setClientForm({...clientForm, nome: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-black" /></div>
                         <div className="md:col-span-1"><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Note</label><input type="text" value={clientForm.note} onChange={e=>setClientForm({...clientForm, note: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-bold" /></div>
-                        <div className="flex items-end gap-2"><button onClick={handleSaveClient} className="flex-1 bg-red-600 text-white font-black py-3 rounded-xl">SALVA</button><button onClick={()=>setIsAdding(false)} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
+                        <div className="flex items-end gap-2"><button onClick={handleSaveClient} className="flex-1 bg-red-600 text-white font-black py-3 rounded-xl">SALVA</button><button onClick={()=>{setIsAdding(false); setIsEditing(false);}} className="bg-slate-200 p-3 rounded-xl"><X className="w-5 h-5"/></button></div>
                      </div>
                    )}
                 </div>
@@ -306,7 +324,12 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                              <td className="px-8 py-6 text-xs font-black text-slate-900">{p.codice}</td>
                              <td className="px-8 py-6 text-sm text-slate-600">{p.descr}</td>
                              <td className="px-8 py-6 text-center text-red-600 font-black text-xs">{p.lungMax || 6000} mm</td>
-                             <td className="px-8 py-6 text-center"><button onClick={()=>deleteItem('profili', p.codice)} className="p-3 text-slate-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-5 h-5" /></button></td>
+                             <td className="px-8 py-6 text-center">
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button onClick={()=>editItem('profili', p)} className="p-3 text-slate-300 hover:text-blue-600 transition-colors"><Edit3 className="w-5 h-5" /></button>
+                                  <button onClick={()=>deleteItem('profili', p.codice)} className="p-3 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-5 h-5" /></button>
+                                </div>
+                             </td>
                           </tr>
                        ))}
                        {activeTab === 'pannelli' && panelMaterials.filter(p=>p.codice.includes(searchTerm.toUpperCase()) || p.materiale.includes(searchTerm)).map(p => (
@@ -315,7 +338,12 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                              <td className="px-8 py-6 text-sm text-blue-600">{p.materiale}</td>
                              <td className="px-8 py-6 text-center"><RotateCw className={`w-4 h-4 mx-auto ${p.giraPezzoDefault ? 'text-green-500' : 'text-slate-200'}`} /></td>
                              <td className="px-8 py-6 text-center text-red-600 font-black text-xs">{p.lungDefault} x {p.altDefault} mm</td>
-                             <td className="px-8 py-6 text-center"><button onClick={()=>deleteItem('pannelli', p.id)} className="p-3 text-slate-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-5 h-5" /></button></td>
+                             <td className="px-8 py-6 text-center">
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button onClick={()=>editItem('pannelli', p)} className="p-3 text-slate-300 hover:text-blue-600 transition-colors"><Edit3 className="w-5 h-5" /></button>
+                                  <button onClick={()=>deleteItem('pannelli', p.id)} className="p-3 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-5 h-5" /></button>
+                                </div>
+                             </td>
                           </tr>
                        ))}
                        {activeTab === 'clienti' && clients.filter(c=>c.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
@@ -323,7 +351,12 @@ ALTER TABLE commesse DISABLE ROW LEVEL SECURITY;`;
                              <td className="px-8 py-6 text-sm font-black text-slate-900">{c.nome}</td>
                              <td className="px-8 py-6 text-sm text-slate-500 font-normal">{c.note || '-'}</td>
                              <td className="px-8 py-6 text-center text-[10px] text-slate-400 font-black"><Calendar className="w-3 h-3 inline mr-1" />{new Date(c.dataAggiunta).toLocaleDateString()}</td>
-                             <td className="px-8 py-6 text-center"><button onClick={()=>deleteItem('clienti', c.id)} className="p-3 text-slate-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-5 h-5" /></button></td>
+                             <td className="px-8 py-6 text-center">
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button onClick={()=>editItem('clienti', c)} className="p-3 text-slate-300 hover:text-blue-600 transition-colors"><Edit3 className="w-5 h-5" /></button>
+                                  <button onClick={()=>deleteItem('clienti', c.id)} className="p-3 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-5 h-5" /></button>
+                                </div>
+                             </td>
                           </tr>
                        ))}
                        {activeTab === 'commesse' && commesse.filter(c=>c.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || c.numero.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (

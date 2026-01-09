@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Play, Download, Trash2, Layout, Maximize, Settings, FileText, Square, Save, FileSpreadsheet, Ruler } from 'lucide-react';
+import { Plus, Play, Download, Trash2, Layout, Maximize, Settings, FileText, Square, Save, FileSpreadsheet, Ruler, Palette } from 'lucide-react';
 import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
@@ -18,6 +18,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   const [selectedPanelId, setSelectedPanelId] = useState('');
   const [materiale, setMateriale] = useState('Lexan');
   const [spessore, setSpessore] = useState('');
+  const [colore, setColore] = useState('');
   const [larghezzaLastra, setLarghezzaLastra] = useState('3050');
   const [altezzaLastra, setAltezzaLastra] = useState('2050');
   const [lunghezza, setLunghezza] = useState('');
@@ -64,7 +65,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       setMateriale(p.materiale);
       setLarghezzaLastra(p.lungDefault.toString());
       setAltezzaLastra(p.altDefault.toString());
-      // Applica il default di rotazione dall'archivio
       setRotazione(p.giraPezzoDefault);
     }
   };
@@ -78,6 +78,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       id: Math.random().toString(36).substr(2, 9),
       materiale,
       spessore,
+      colore,
       lunghezza: parseFloat(lunghezza.replace(',', '.')),
       altezza: parseFloat(altezza.replace(',', '.')),
       quantita,
@@ -85,7 +86,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     };
     setDistinta(prev => [...prev, newCut]);
     
-    // Pulizia campi: NON puliamo lo spessore come richiesto
+    // Pulizia campi: NON puliamo spessore e colore come richiesto
     setLunghezza('');
     setAltezza('');
     setQuantita(1);
@@ -140,7 +141,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
 
   useEffect(() => {
     if (results && canvasRef.current) drawVisualization();
-  }, [results, results?.toString()]);
+  }, [results]);
 
   const drawVisualization = () => {
     const canvas = canvasRef.current;
@@ -212,6 +213,10 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 <input type="text" value={spessore} onChange={e=>setSpessore(e.target.value)} placeholder="es. 3" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black" />
               </div>
             </div>
+            <div className="grid grid-cols-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 flex items-center gap-1"><Palette className="w-2.5 h-2.5" /> Colore / Finitura</label>
+                <input type="text" value={colore} onChange={e=>setColore(e.target.value)} placeholder="es. Bianco, RAL 9010..." className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold" />
+            </div>
             <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Base (X)</label><input type="text" value={lunghezza} onChange={e=>setLunghezza(e.target.value)} placeholder="0.0" className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black text-red-600 focus:border-red-500 outline-none" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Altezza (Y)</label><input type="text" value={altezza} onChange={e=>setAltezza(e.target.value)} placeholder="0.0" className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black text-red-600 focus:border-red-500 outline-none" /></div>
@@ -244,17 +249,24 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
           <div className="overflow-y-auto flex-1">
              <table className="w-full text-left text-xs">
                 <thead className="bg-white border-b sticky top-0 z-10 shadow-sm">
-                  <tr><th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Materiale</th><th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Misure (B x A)</th><th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight text-center">Quantità</th><th className="px-6 py-4 text-center">X</th></tr>
+                  <tr>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Dati Pezzo</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Colore</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Misure (B x A)</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight text-center">Qty</th>
+                    <th className="px-6 py-4 text-center">X</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {distinta.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-medium">Nessun pezzo inserito in questa distinta.</td></tr>
+                    <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-300 italic font-medium">Nessun pezzo inserito in questa distinta.</td></tr>
                   ) : (
                     distinta.map(cut => (
                       <tr key={cut.id} className="hover:bg-slate-50 font-bold group">
-                        <td className="px-6 py-4 text-slate-800"><span className="bg-slate-100 px-2 py-1 rounded text-[10px]">{cut.materiale} {cut.spessore}mm</span></td>
+                        <td className="px-6 py-4 text-slate-800"><span className="bg-slate-100 px-2 py-1 rounded text-[10px] uppercase font-black">{cut.materiale} {cut.spessore}mm</span></td>
+                        <td className="px-6 py-4 text-slate-500 font-bold">{cut.colore || '-'}</td>
                         <td className="px-6 py-4 font-black text-red-600 text-sm">{cut.lunghezza} x {cut.altezza} mm</td>
-                        <td className="px-6 py-4 text-center">{cut.quantita} pz</td>
+                        <td className="px-6 py-4 text-center">{cut.quantita}</td>
                         <td className="px-6 py-4 text-center opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={()=>setDistinta(prev=>prev.filter(c=>c.id!==cut.id))} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button></td>
                       </tr>
                     ))

@@ -5,7 +5,6 @@ import { BarOptimizer } from './components/BarOptimizer';
 import { PanelOptimizer } from './components/PanelOptimizer';
 import { ProfileDatabase } from './components/ProfileDatabase';
 import { OptimizerMode, CommessaArchiviata } from './types';
-// Added missing 'Settings' import from 'lucide-react'
 import { AlertTriangle, CheckCircle2, Database as DbIcon, Cloud, Monitor, Activity, RefreshCw, Settings } from 'lucide-react';
 import { supabaseService } from './services/supabaseService';
 
@@ -19,8 +18,13 @@ const App: React.FC = () => {
   const [lastSyncTime, setLastSyncTime] = useState<string>('--:--');
   
   const syncTimerRef = useRef<any>(null);
+  const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
+    // Se abbiamo fatto modifiche locali negli ultimi 10 secondi, saltiamo la sync automatica
+    // per evitare che i dati vecchi dal cloud sovrascrivano quelli nuovi locali non ancora propagati.
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 10000) return;
+    
     if (isSyncing || !supabaseService.isInitialized()) return;
     
     setIsSyncing(true);
@@ -49,7 +53,6 @@ const App: React.FC = () => {
       
       setLastSyncTime(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       
-      // Notifica i componenti solo se i dati sono effettivamente cambiati nel Cloud
       if (changed || isManual) {
         window.dispatchEvent(new CustomEvent('alea_data_updated'));
       }
@@ -73,7 +76,6 @@ const App: React.FC = () => {
       if (ok) performGlobalSync(true);
     }
 
-    // Timer di sincronizzazione automatica aggressivo (ogni 5 secondi)
     syncTimerRef.current = setInterval(() => {
       if (supabaseService.isInitialized()) {
         setIsCloudActive(true);
@@ -83,8 +85,14 @@ const App: React.FC = () => {
       }
     }, 5000);
 
+    const handleMutation = () => {
+      lastMutationTimeRef.current = Date.now();
+    };
+    window.addEventListener('alea_local_mutation', handleMutation);
+
     return () => {
       if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+      window.removeEventListener('alea_local_mutation', handleMutation);
     };
   }, []);
 
@@ -119,9 +127,8 @@ const App: React.FC = () => {
             <div className="p-10 space-y-6">
               <div className="space-y-4 text-slate-600 leading-relaxed text-sm">
                 <p>L’ottimizzatore è uno strumento gratuito messo a disposizione da <strong>ALEA SISTEMI S.r.l.</strong> per facilitare il calcolo dei tagli e l’organizzazione dei materiali.</p>
-                <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. Nonostante la massima attenzione nella realizzazione del software, ALEA SISTEMI S.r.l. non garantisce l’accuratezza, la completezza o l’assenza di errori nei risultati forniti.</p>
-                <p>L’azienda non potrà essere ritenuta responsabile per eventuali danni, sprechi di materiale o altre conseguenze derivanti dall’uso dei dati generati dallo strumento.</p>
-                <p className="font-black text-slate-900">Proseguendo, l’utente dichiara di aver letto e accettato integralmente queste condizioni.</p>
+                <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. ALEA SISTEMI S.r.l. non garantisce l’accuratezza nei risultati forniti.</p>
+                <p className="font-black text-slate-900">Proseguendo, l’utente dichiara di aver accettato integralmente queste condizioni.</p>
               </div>
               <button 
                 onClick={handleAcceptDisclaimer}
@@ -171,7 +178,6 @@ const App: React.FC = () => {
               onClick={goToCloudSettings}
               className="flex items-center px-4 py-2 space-x-2 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all group"
             >
-              {/* Corrected: Settings icon is now properly imported */}
               <Settings className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 transition-colors" />
               <span className="text-[10px] font-black uppercase tracking-tight text-slate-500 group-hover:text-slate-900">Setup</span>
             </button>
@@ -189,7 +195,7 @@ const App: React.FC = () => {
         )}
 
         <footer className="mt-12 pt-8 border-t border-gray-200 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - Software di Produzione V4.5
+          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - Software di Produzione V4.6
         </footer>
       </main>
     </div>

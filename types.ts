@@ -66,6 +66,7 @@ export interface PanelCutRequest {
   id: string;
   materiale: string;
   spessore: string;
+  colore: string;
   lunghezza: number;
   altezza: number;
   quantita: number;
@@ -75,6 +76,7 @@ export interface PanelCutRequest {
 export interface PlacedPanel {
   material: string;
   spessore: string;
+  colore?: string;
   x: number;
   y: number;
   w: number;
