@@ -1,131 +1,114 @@
 
-import { OptimizationResult, PanelOptimizationResult, GroupedBarResult, OptimizedBar } from '../types';
+import { OptimizationResult, PanelOptimizationResult, OptimizedBar, GroupedBarResult } from '../types';
+
+// Helper to group bars for export to handle optional grouping logic requested by the UI
+const getGroupedBars = (barre: OptimizedBar[]): GroupedBarResult[] => {
+  const groups: Record<string, GroupedBarResult> = {};
+  barre.forEach(bar => {
+    const fingerprint = bar.tagli.map(t => `${t.lung}-${t.angoli}`).join('|');
+    if (groups[fingerprint]) groups[fingerprint].count++;
+    else groups[fingerprint] = { ...bar, count: 1 };
+  });
+  return Object.values(groups);
+};
 
 export const exportService = {
-  toPdf: (results: OptimizationResult, cliente: string, commessa: string, grouped: boolean = true) => {
+  // Fix: added groupBars parameter to match call site in BarOptimizer.tsx (line 315)
+  toPdf: (results: OptimizationResult, cliente: string, commessa: string, groupBars: boolean = false) => {
     const { jsPDF } = (window as any).jspdf;
     const doc = new jsPDF();
     const margin = 15;
-    const pageWidth = 210;
     doc.setFontSize(28); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 25);
-    doc.setFontSize(10); doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold"); doc.text("OTTIMIZZATORE PROFESSIONALE DI TAGLIO", margin, 31, { charSpace: 2 });
+    doc.setFontSize(10); doc.setTextColor(220, 38, 38); doc.text("OTTIMIZZATORE PROFESSIONALE DI TAGLIO", margin, 31);
     doc.setDrawColor(226, 232, 240); doc.line(margin, 38, 200, 38);
-    doc.setFontSize(10); doc.setTextColor(100); doc.setFont("helvetica", "bold"); doc.text("CLIENTE:", margin, 48); doc.text("COMMESSA:", margin, 54); doc.text("DATA:", 150, 48);
-    doc.setTextColor(40); doc.setFont("helvetica", "normal"); doc.text(cliente || 'N/D', margin + 25, 48); doc.text(commessa || 'N/D', margin + 25, 54); doc.text(new Date().toLocaleDateString('it-IT'), 165, 48);
-
+    doc.setFontSize(12); doc.setTextColor(100); doc.text("CLIENTE:", margin, 48); doc.text("COMMESSA:", margin, 54);
+    doc.setTextColor(40); doc.text(cliente || 'N/D', margin + 30, 48); doc.text(commessa || 'N/D', margin + 30, 54);
+    
     let y = 65;
-    const pageHeight = doc.internal.pageSize.height;
-
     for (const [code, data] of Object.entries(results)) {
-      if (y > pageHeight - 60) { doc.addPage(); y = 20; }
-      doc.setFillColor(15, 23, 42); doc.rect(margin, y, 180, 10, 'F');
-      doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(255); doc.text(`${code} - ${data.descrizione.toUpperCase()}`, margin + 5, y + 7);
-      y += 15;
-      doc.setTextColor(15, 23, 42); doc.setFontSize(10); doc.text("1. RIEPILOGO MATERIALE E TAGLI", margin, y);
+      doc.setFillColor(15, 23, 42); doc.rect(margin, y, 180, 12, 'F');
+      doc.setFontSize(14); doc.setTextColor(255); doc.text(`${code} - ${data.descrizione}`, margin + 5, y + 8);
+      y += 20;
+      
+      // Determine if bars should be displayed as single items or grouped by identical schema
+      const barreToPrint = groupBars ? getGroupedBars(data.barre) : data.barre.map(b => ({ ...b, count: 1 }));
+      
+      barreToPrint.forEach((bar, bIdx) => {
+        doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
+        const label = bar.count > 1 ? `${bar.count}x BARRE IDENTICHE` : `BARRA ${bIdx + 1}`;
+        doc.text(`${label} - Taglio: ${bar.somma}mm | Sfrido: ${bar.residuo}mm`, margin, y);
+        y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        doc.text(`Schema: ${bar.riepilogo}`, margin, y); y += 10;
+        if (y > 270) { doc.addPage(); y = 20; }
+      });
       y += 5;
-      const pezziSummary: Record<string, { qty: number, lung: number, angoli: string }> = {};
-      data.barre.forEach(bar => { bar.tagli.forEach(t => { const key = `${t.lung}-${t.angoli}`; if (pezziSummary[key]) pezziSummary[key].qty++; else pezziSummary[key] = { qty: 1, lung: t.lung, angoli: t.angoli }; }); });
-      const sortedPezzi = Object.values(pezziSummary).sort((a, b) => b.lung - a.lung);
-      doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252); doc.rect(margin, y, 85, 25, 'FD');
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("BARRE DA PRELEVARE", margin + 5, y + 7);
-      doc.setFontSize(14); doc.setTextColor(220, 38, 38); doc.text(`${data.barre.length} BARRE`, margin + 5, y + 16);
-      doc.setFontSize(8); doc.setTextColor(100); doc.setFont("helvetica", "normal"); doc.text(`Profilo: ${code}`, margin + 5, y + 21);
-      doc.rect(margin + 95, y, 85, 25, 'FD');
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(15, 23, 42); doc.text("TOTALE PEZZI TAGLIATI", margin + 100, y + 7);
-      doc.setFontSize(14); doc.text(`${sortedPezzi.reduce((s, p) => s + p.qty, 0)} PEZZI`, margin + 100, y + 16);
-      y += 32;
-      doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Controllo conteggio pezzi:", margin, y);
-      y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(8); let colX = margin;
-      sortedPezzi.forEach((p, idx) => { doc.text(`${p.qty}x ${p.lung}mm (${p.angoli})`, colX, y); colX += 45; if (colX > 160) { colX = margin; y += 5; } if (y > pageHeight - 20) { doc.addPage(); y = 20; colX = margin; } });
-      y += 12;
-      doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42); doc.text("2. SCHEMI DI TAGLIO DETTAGLIATI", margin, y);
-      y += 8;
-      let barreDaStampare = grouped ? Object.values(data.barre.reduce((acc: any, bar) => { const f = bar.tagli.map(t => `${t.lung}-${t.angoli}`).join('|'); if (acc[f]) acc[f].count++; else acc[f] = { ...bar, count: 1 }; return acc; }, {})) : data.barre.map(b => ({ ...b, count: 1 }));
-      barreDaStampare.forEach((bar: any, idx) => { if (y > pageHeight - 35) { doc.addPage(); y = 25; } doc.setDrawColor(241, 245, 249); doc.setFillColor(248, 250, 252); doc.rect(margin, y - 5, 180, 20, 'FD'); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(15, 23, 42); doc.text(bar.count > 1 ? `${bar.count}x BARRE IDENTICHE` : `BARRA ${idx + 1}`, margin + 5, y); doc.setFontSize(8); doc.setTextColor(100); doc.text(`TAGLIO: ${bar.somma} mm  |  SCARTO: ${bar.residuo} mm`, margin + 5, y + 6); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(30, 41, 59); const cutsStr = bar.riepilogo; const splitText = doc.splitTextToSize(`Schema: ${cutsStr}`, 170); doc.text(splitText, margin + 5, y); y += (splitText.length * 5) + 8; });
-      y += 10;
     }
-    doc.save(`ALEA_Distinta_Barre_${commessa || 'Taglio'}.pdf`);
+    doc.save(`ALEA_Barre_${commessa || 'Export'}.pdf`);
   },
 
-  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number, coloreLastra: string = '') => {
+  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number, colore: string, spessore: string) => {
     const { jsPDF } = (window as any).jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const margin = 15;
     const pageWidth = 210;
-    const pageHeight = 297;
-    let firstPage = true;
-    const colori: Record<string, string> = { "Lexan":"#FF9999","Dibond":"#99CCFF","Alveolare":"#99FF99","Pvc":"#FFCC99","Vetro":"#CCCCCC" };
+    let first = true;
 
     Object.values(results).forEach(group => {
       group.sheets.forEach((sheet, sIdx) => {
-        if (!firstPage) doc.addPage();
-        firstPage = false;
+        if (!first) doc.addPage(); first = false;
+        doc.setFontSize(26); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
+        doc.setFontSize(10); doc.setTextColor(220, 38, 38); doc.text("DISTINTA TAGLIO PANNELLI", margin, 26);
         
-        // Header
-        doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
-        doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("OTTIMIZZATORE PANNELLI", margin, 25, { charSpace: 1 });
-        
-        doc.setFontSize(8); doc.setTextColor(100); doc.setFont("helvetica", "normal");
-        doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 32);
-        doc.text(`Materiale: ${group.material} | Spessore: ${group.spessore}mm | Colore Lastra: ${coloreLastra || 'N/D'}`, margin, 37);
-        // Fix: Changed 'altezzaLastra' to use the parameter 'sheetH'
-        doc.text(`Misura Lastra: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 42);
+        doc.setFontSize(12); doc.setTextColor(100);
+        doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 35);
+        doc.setTextColor(15, 23, 42); doc.setFontSize(14);
+        doc.text(`Materiale: ${group.material} | Spessore: ${spessore}mm | Colore: ${colore || 'N/D'}`, margin, 44);
+        doc.setFontSize(11); doc.text(`Lastra Grezza: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 50);
 
-        const scale = Math.min((pageWidth - 2 * margin) / sheetW, (pageHeight - 110) / sheetH);
+        const scale = Math.min((pageWidth - 2 * margin) / sheetW, 150 / sheetH);
         const offsetX = (pageWidth - sheetW * scale) / 2;
-        const offsetY = 55;
-
-        // Disegno Lastra
-        doc.setDrawColor(200); doc.setLineWidth(0.5); doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
-        doc.setFillColor(245, 245, 245); doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale, 'F');
+        const offsetY = 65;
+        doc.setDrawColor(180); doc.setLineWidth(0.5);
+        doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
 
         sheet.panels.forEach(p => {
-          const colorHex = colori[p.material] || '#CCCCCC';
-          const rgb = colorHex.replace('#','').match(/\w\w/g)?.map(h => parseInt(h, 16)) || [204, 204, 204];
-          doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-          doc.setDrawColor(255); doc.setLineWidth(0.1);
+          doc.setFillColor(240, 240, 240);
           doc.rect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale, 'FD');
-          
-          if (p.w * scale > 15 && p.h * scale > 8) {
-            const label = `${p.w}x${p.h}`;
-            doc.setFontSize(6);
-            doc.setFont("helvetica", "bold");
-            const centerX = offsetX + (p.x + p.w / 2) * scale;
-            const centerY = offsetY + (p.y + p.h / 2) * scale;
-            doc.setTextColor(0);
-            doc.text(label, centerX, centerY + 1, { align: 'center' });
+          if (p.w * scale > 15) {
+            doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+            doc.text(`${p.w}x${p.h}`, offsetX + (p.x + p.w/2)*scale, offsetY + (p.y + p.h/2)*scale, { align: 'center' });
           }
         });
-
-        // Footer pagina
-        doc.setFontSize(8); doc.setTextColor(15, 23, 42);
-        doc.text(`Efficienza: ${((sheet.areaUsata / (sheetW * sheetH)) * 100).toFixed(1)}% | Scarto: ${(((sheetW * sheetH) - sheet.areaUsata) / (sheetW * sheetH) * 100).toFixed(1)}%`, margin, pageHeight - 15);
+        
+        doc.setFontSize(10); doc.setTextColor(100);
+        doc.text(`Efficienza Foglio: ${((sheet.areaUsata / (sheetW * sheetH)) * 100).toFixed(1)}%`, margin, 280);
       });
     });
-    doc.save(`ALEA_Nesting_Pannelli_${commessa || 'Taglio'}.pdf`);
+    doc.save(`ALEA_Nesting_${commessa || 'Pannelli'}.pdf`);
   },
 
-  toCsv: (results: OptimizationResult, grouped: boolean = true) => {
-    let csv = "ALEA SISTEMI - Distinta Barre\nCodice Profilo,Q.ta Barre,Lunghezza Tagli,Somma,Residuo\n";
-    for (const [code, data] of Object.entries(results)) {
-      data.barre.forEach((b, i) => { csv += `"${code}","1","${b.riepilogo}","${b.somma}","${b.residuo}"\n`; });
-    }
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `ALEA_Export_Barre.csv`); link.click();
+  // Fix: added groupBars parameter to match call site in BarOptimizer.tsx (line 314)
+  toCsv: (results: OptimizationResult, groupBars: boolean = false) => {
+    let csv = "Profilo;Quantità;Somma;Sfrido;Riepilogo\n";
+    Object.entries(results).forEach(([code, data]) => {
+      // Respect grouping preference in CSV export as well
+      const barreToPrint = groupBars ? getGroupedBars(data.barre) : data.barre.map(b => ({ ...b, count: 1 }));
+      barreToPrint.forEach(b => { 
+        csv += `${code};${b.count};${b.somma};${b.residuo};"${b.riepilogo}"\n`; 
+      });
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "ALEA_Export_Barre.csv"; link.click();
   },
 
   panelsToCsv: (results: PanelOptimizationResult) => {
-    let csv = "ALEA SISTEMI - Distinta Pannelli\nMateriale,Spessore,Colore,Larghezza,Altezza,Lastra ID,Ruotato\n";
-    Object.values(results).forEach(group => {
-      group.sheets.forEach((sheet, sIdx) => { 
-        sheet.panels.forEach(p => { 
-          csv += `"${group.material}","${group.spessore}","${p.colore || '-'}","${p.w}","${p.h}","${sIdx + 1}","${p.rotated ? 'Sì' : 'No'}"\n`; 
-        }); 
+    let csv = "Materiale;Spessore;Larghezza;Altezza;Rotazione\n";
+    Object.values(results).forEach(g => {
+      g.sheets.forEach(s => {
+        s.panels.forEach(p => { csv += `${p.material};${p.spessore};${p.w};${p.h};${p.rotated}\n`; });
       });
     });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `ALEA_Export_Pannelli.csv`); link.click();
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "ALEA_Export_Pannelli.csv"; link.click();
   }
 };

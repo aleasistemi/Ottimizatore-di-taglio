@@ -10,6 +10,7 @@ export interface PanelMaterial {
   codice: string;
   descr: string;
   materiale: string;
+  spessore: string; // Aggiunto spessore a livello di materiale/lastra
   lungDefault: number;
   altDefault: number;
   giraPezzoDefault: boolean;
