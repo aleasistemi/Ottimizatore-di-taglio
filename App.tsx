@@ -5,7 +5,7 @@ import { BarOptimizer } from './components/BarOptimizer';
 import { PanelOptimizer } from './components/PanelOptimizer';
 import { ProfileDatabase } from './components/ProfileDatabase';
 import { OptimizerMode, CommessaArchiviata } from './types';
-import { AlertTriangle, CheckCircle2, Database as DbIcon, Cloud, Monitor, Activity, RefreshCw, Settings } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCw, Settings } from 'lucide-react';
 import { supabaseService } from './services/supabaseService';
 
 const App: React.FC = () => {
@@ -16,36 +16,12 @@ const App: React.FC = () => {
   const [isCloudActive, setIsCloudActive] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('--:--');
-
-  // Fix: Implemented missing handleAcceptDisclaimer
-  const handleAcceptDisclaimer = () => {
-    localStorage.setItem('alea_disclaimer_accepted', 'true');
-    setShowDisclaimer(false);
-  };
-
-  // Fix: Implemented missing goToCloudSettings
-  const goToCloudSettings = () => {
-    setActiveMode(OptimizerMode.DATABASE);
-    setDbTab('settings');
-  };
-
-  // Fix: Implemented missing handleOpenCommessa
-  const handleOpenCommessa = (commessa: CommessaArchiviata) => {
-    setLoadedCommessa(commessa);
-    if (commessa.tipo === 'barre') {
-      setActiveMode(OptimizerMode.BARRE);
-    } else {
-      setActiveMode(OptimizerMode.PANNELLI);
-    }
-  };
   
   const syncTimerRef = useRef<any>(null);
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // Blocco ferreo sync se modifiche locali recenti
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 45000) return;
-    
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 30000) return;
     if (isSyncing || !supabaseService.isInitialized()) return;
     
     setIsSyncing(true);
@@ -70,7 +46,7 @@ const App: React.FC = () => {
           }
         }
       }
-      setLastSyncTime(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setLastSyncTime(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
       if (changed || isManual) window.dispatchEvent(new CustomEvent('alea_data_updated'));
     } catch (e) {
       console.error("Sync Error:", e);
@@ -92,7 +68,10 @@ const App: React.FC = () => {
     }
 
     syncTimerRef.current = setInterval(() => {
-      if (supabaseService.isInitialized()) performGlobalSync();
+      if (supabaseService.isInitialized()) {
+        setIsCloudActive(true);
+        performGlobalSync();
+      }
     }, 10000);
 
     const handleMutation = () => { lastMutationTimeRef.current = Date.now(); };
@@ -104,24 +83,37 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const handleAcceptDisclaimer = () => {
+    localStorage.setItem('alea_disclaimer_accepted', 'true');
+    setShowDisclaimer(false);
+  };
+
+  const goToCloudSettings = () => {
+    setActiveMode(OptimizerMode.DATABASE);
+    setDbTab('settings');
+  };
+
+  const handleOpenCommessa = (commessa: CommessaArchiviata) => {
+    setLoadedCommessa(commessa);
+    setActiveMode(commessa.tipo === 'barre' ? OptimizerMode.BARRE : OptimizerMode.PANNELLI);
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900">
       {showDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
-            <div className="bg-red-600 p-8 text-white">
-              <div className="flex items-center gap-4">
-                <AlertTriangle className="w-10 h-10" />
-                <h2 className="text-3xl font-black tracking-tighter italic uppercase">Informativa ALEA</h2>
-              </div>
+            <div className="bg-red-600 p-8 text-white flex items-center gap-4">
+              <AlertTriangle className="w-10 h-10" />
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter">Disclaimer ALEA</h2>
             </div>
-            <div className="p-10 space-y-6 text-slate-700 leading-relaxed text-sm">
+            <div className="p-10 space-y-6 text-slate-700 text-sm leading-relaxed">
               <p>L’ottimizzatore è uno strumento gratuito messo a disposizione da <strong>ALEA SISTEMI S.r.l.</strong> per facilitare il calcolo dei tagli e l’organizzazione dei materiali.</p>
               <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. Nonostante la massima attenzione nella realizzazione del software, ALEA SISTEMI S.r.l. non garantisce l’accuratezza, la completezza o l’assenza di errori nei risultati forniti.</p>
               <p>L’azienda non potrà essere ritenuta responsabile per eventuali danni, sprechi di materiale o altre conseguenze derivanti dall’uso dei dati generati dallo strumento.</p>
-              <p className="font-black text-slate-900 border-t pt-4">Proseguendo, l’utente dichiara di aver letto e accettato queste condizioni.</p>
+              <p className="font-bold text-slate-900 pt-4 border-t">Proseguendo, l’utente dichiara di aver letto e accettato queste condizioni.</p>
               <button onClick={handleAcceptDisclaimer} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all active:scale-95">
-                <span>ACCETTO E PROSEGUO</span>
+                ACCETTO E PROSEGUO
               </button>
             </div>
           </div>
@@ -150,11 +142,15 @@ const App: React.FC = () => {
                 <div className={`w-2.5 h-2.5 rounded-full ${isCloudActive ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}`}></div>
               </div>
               <div className="flex flex-col">
-                <span className={`text-[9px] font-black uppercase tracking-tight ${isCloudActive ? 'text-blue-700' : 'text-slate-500'}`}>Cloud Alea Sync</span>
-                <span className="text-[8px] font-bold text-slate-400">Aggiornato: {lastSyncTime}</span>
+                <span className={`text-[9px] font-black uppercase tracking-tight ${isCloudActive ? 'text-blue-700' : 'text-slate-500'}`}>Alea Cloud Sync</span>
+                <span className="text-[8px] font-bold text-slate-400">Ultimo: {lastSyncTime}</span>
               </div>
               {isSyncing && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
             </div>
+            <button onClick={goToCloudSettings} className="flex items-center px-4 py-2 space-x-2 rounded-xl border border-transparent hover:bg-slate-50">
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[10px] font-black uppercase tracking-tight text-slate-500">Setup</span>
+            </button>
           </div>
         </header>
 
