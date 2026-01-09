@@ -47,7 +47,7 @@ export const exportService = {
     doc.save(`ALEA_Distinta_Barre_${commessa || 'Taglio'}.pdf`);
   },
 
-  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number) => {
+  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number, coloreLastra: string = '') => {
     const { jsPDF } = (window as any).jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const margin = 15;
@@ -60,43 +60,49 @@ export const exportService = {
       group.sheets.forEach((sheet, sIdx) => {
         if (!firstPage) doc.addPage();
         firstPage = false;
+        
+        // Header
         doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
         doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("OTTIMIZZATORE PANNELLI", margin, 25, { charSpace: 1 });
-        doc.setFontSize(8); doc.setTextColor(100); doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 32);
-        doc.text(`Materiale: ${group.material} | Spessore: ${group.spessore}mm | Lastra ${sIdx + 1} (${sheetW}x${sheetH}mm)`, margin, 37);
+        
+        doc.setFontSize(8); doc.setTextColor(100); doc.setFont("helvetica", "normal");
+        doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 32);
+        doc.text(`Materiale: ${group.material} | Spessore: ${group.spessore}mm | Colore Lastra: ${coloreLastra || 'N/D'}`, margin, 37);
+        // Fix: Changed 'altezzaLastra' to use the parameter 'sheetH'
+        doc.text(`Misura Lastra: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 42);
 
-        const scale = Math.min((pageWidth - 2 * margin) / sheetW, (pageHeight - 100) / sheetH);
+        const scale = Math.min((pageWidth - 2 * margin) / sheetW, (pageHeight - 110) / sheetH);
         const offsetX = (pageWidth - sheetW * scale) / 2;
-        const offsetY = 50;
+        const offsetY = 55;
 
-        doc.setDrawColor(0); doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
+        // Disegno Lastra
+        doc.setDrawColor(200); doc.setLineWidth(0.5); doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
+        doc.setFillColor(245, 245, 245); doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale, 'F');
 
         sheet.panels.forEach(p => {
           const colorHex = colori[p.material] || '#CCCCCC';
           const rgb = colorHex.replace('#','').match(/\w\w/g)?.map(h => parseInt(h, 16)) || [204, 204, 204];
           doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+          doc.setDrawColor(255); doc.setLineWidth(0.1);
           doc.rect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale, 'FD');
           
-          if (p.w * scale > 15 && p.h * scale > 10) {
-            const label = `${p.w}x${p.h}${p.colore ? ` (${p.colore})` : ''}`;
-            doc.setFontSize(7);
+          if (p.w * scale > 15 && p.h * scale > 8) {
+            const label = `${p.w}x${p.h}`;
+            doc.setFontSize(6);
             doc.setFont("helvetica", "bold");
-            const txtWidth = doc.getTextWidth(label);
             const centerX = offsetX + (p.x + p.w / 2) * scale;
             const centerY = offsetY + (p.y + p.h / 2) * scale;
-            
-            doc.setFillColor(255, 255, 255);
-            doc.rect(centerX - (txtWidth/2 + 2), centerY - 3, txtWidth + 4, 6, 'F');
             doc.setTextColor(0);
             doc.text(label, centerX, centerY + 1, { align: 'center' });
           }
         });
 
-        doc.setFontSize(9); doc.setTextColor(15, 23, 42);
-        doc.text(`Efficienza: ${((sheet.areaUsata / (sheetW * sheetH)) * 100).toFixed(1)}% | Area Tagli: ${sheet.areaUsata.toLocaleString()} mm²`, margin, pageHeight - 15);
+        // Footer pagina
+        doc.setFontSize(8); doc.setTextColor(15, 23, 42);
+        doc.text(`Efficienza: ${((sheet.areaUsata / (sheetW * sheetH)) * 100).toFixed(1)}% | Scarto: ${(((sheetW * sheetH) - sheet.areaUsata) / (sheetW * sheetH) * 100).toFixed(1)}%`, margin, pageHeight - 15);
       });
     });
-    doc.save(`ALEA_Pannelli_${commessa || 'Taglio'}.pdf`);
+    doc.save(`ALEA_Nesting_Pannelli_${commessa || 'Taglio'}.pdf`);
   },
 
   toCsv: (results: OptimizationResult, grouped: boolean = true) => {

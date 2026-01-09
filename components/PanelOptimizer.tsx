@@ -18,7 +18,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   const [selectedPanelId, setSelectedPanelId] = useState('');
   const [materiale, setMateriale] = useState('Lexan');
   const [spessore, setSpessore] = useState('');
-  const [colore, setColore] = useState('');
+  const [coloreLastra, setColoreLastra] = useState('');
   const [larghezzaLastra, setLarghezzaLastra] = useState('3050');
   const [altezzaLastra, setAltezzaLastra] = useState('2050');
   const [lunghezza, setLunghezza] = useState('');
@@ -48,6 +48,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       setCommessa(externalData.numero);
       setDistinta(externalData.dettagli.distinta || []);
       setResults(externalData.dettagli.results || null);
+      if (externalData.dettagli.coloreLastra) setColoreLastra(externalData.dettagli.coloreLastra);
     }
 
     const handleUpdate = () => {
@@ -78,7 +79,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       id: Math.random().toString(36).substr(2, 9),
       materiale,
       spessore,
-      colore,
+      colore: coloreLastra, // Ora associato alla lastra ma salvato nel pezzo per coerenza dati
       lunghezza: parseFloat(lunghezza.replace(',', '.')),
       altezza: parseFloat(altezza.replace(',', '.')),
       quantita,
@@ -86,7 +87,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     };
     setDistinta(prev => [...prev, newCut]);
     
-    // Pulizia campi: NON puliamo spessore e colore come richiesto
+    // Pulizia campi veloci
     setLunghezza('');
     setAltezza('');
     setQuantita(1);
@@ -112,7 +113,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       cliente: cliente || 'Privato',
       data: new Date().toISOString(),
       tipo: 'pannelli',
-      dettagli: { distinta, results }
+      dettagli: { distinta, results, coloreLastra }
     };
     const updatedCommesse = [nuovaCommessa, ...commesse];
     localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
@@ -120,7 +121,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa archiviata sul Cloud!");
+            alert("Commessa archiviata su ALEA Cloud!");
         } catch (e) {
             alert("Errore Cloud. Salvata localmente.");
         }
@@ -133,6 +134,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     if (distinta.length === 0) return;
     setIsOptimizing(true);
     setTimeout(() => {
+      // Passiamo il colore della lastra ai risultati per l'esportazione
       const res = optimizerService.optimizePanels(distinta, parseFloat(larghezzaLastra), parseFloat(altezzaLastra));
       setResults(res);
       setIsOptimizing(false);
@@ -196,12 +198,16 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Base (mm)</label><input type="number" value={larghezzaLastra} onChange={e=>setLarghezzaLastra(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg font-black text-red-600" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Altezza (mm)</label><input type="number" value={altezzaLastra} onChange={e=>setAltezzaLastra(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg font-black text-red-600" /></div>
               </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 flex items-center gap-1"><Palette className="w-2.5 h-2.5" /> Colore / Finitura Lastra</label>
+                <input type="text" value={coloreLastra} onChange={e=>setColoreLastra(e.target.value)} placeholder="es. Bianco, RAL 9010..." className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold italic" />
+              </div>
            </div>
         </section>
 
         <section className="bg-white p-6 rounded-[2rem] border border-gray-200 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-5"><Ruler className="w-20 h-20" /></div>
-          <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2 uppercase tracking-tighter"><Plus className="w-5 h-5 text-red-600" /><span>Nuovo Pezzo Tagliato</span></h3>
+          <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2 uppercase tracking-tighter"><Plus className="w-5 h-5 text-red-600" /><span>Aggiunta Pezzo Tagliato</span></h3>
           <div className="space-y-5 relative z-10">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -213,16 +219,12 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 <input type="text" value={spessore} onChange={e=>setSpessore(e.target.value)} placeholder="es. 3" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black" />
               </div>
             </div>
-            <div className="grid grid-cols-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 flex items-center gap-1"><Palette className="w-2.5 h-2.5" /> Colore / Finitura</label>
-                <input type="text" value={colore} onChange={e=>setColore(e.target.value)} placeholder="es. Bianco, RAL 9010..." className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold" />
-            </div>
             <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Base (X)</label><input type="text" value={lunghezza} onChange={e=>setLunghezza(e.target.value)} placeholder="0.0" className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black text-red-600 focus:border-red-500 outline-none" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Altezza (Y)</label><input type="text" value={altezza} onChange={e=>setAltezza(e.target.value)} placeholder="0.0" className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black text-red-600 focus:border-red-500 outline-none" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Quantità</label><input type="number" value={quantita} onChange={e=>setQuantita(parseInt(e.target.value)||1)} className="w-full px-4 py-2 bg-gray-50 border rounded-xl font-black" /></div>
+              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Quantità</label><input type="number" value={quantita} onChange={e=>setQuantita(parseInt(e.target.value)||1)} className="w-full px-4 py-2 bg-gray-50 border rounded-xl font-black text-center" /></div>
               <div className="flex items-end pb-2">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={rotazione} onChange={e=>setRotazione(e.target.checked)} className="w-5 h-5 text-red-600 rounded" />
@@ -231,7 +233,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
               </div>
             </div>
             <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-red-700 transition-all flex items-center justify-center gap-3 active:scale-95">
-              <Plus className="w-6 h-6" /><span>AGGIUNGI A DISTINTA</span>
+              <Plus className="w-6 h-6" /><span>INSERISCI IN DISTINTA</span>
             </button>
           </div>
         </section>
@@ -250,23 +252,21 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
              <table className="w-full text-left text-xs">
                 <thead className="bg-white border-b sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Dati Pezzo</th>
-                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Colore</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Materiale / Sp.</th>
                     <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight">Misure (B x A)</th>
-                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight text-center">Qty</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-tight text-center">Quantità</th>
                     <th className="px-6 py-4 text-center">X</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {distinta.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-300 italic font-medium">Nessun pezzo inserito in questa distinta.</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-medium uppercase tracking-widest text-[10px]">Distinta Vuota</td></tr>
                   ) : (
                     distinta.map(cut => (
                       <tr key={cut.id} className="hover:bg-slate-50 font-bold group">
                         <td className="px-6 py-4 text-slate-800"><span className="bg-slate-100 px-2 py-1 rounded text-[10px] uppercase font-black">{cut.materiale} {cut.spessore}mm</span></td>
-                        <td className="px-6 py-4 text-slate-500 font-bold">{cut.colore || '-'}</td>
                         <td className="px-6 py-4 font-black text-red-600 text-sm">{cut.lunghezza} x {cut.altezza} mm</td>
-                        <td className="px-6 py-4 text-center">{cut.quantita}</td>
+                        <td className="px-6 py-4 text-center text-slate-900 font-black">{cut.quantita} pz</td>
                         <td className="px-6 py-4 text-center opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={()=>setDistinta(prev=>prev.filter(c=>c.id!==cut.id))} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button></td>
                       </tr>
                     ))
@@ -287,7 +287,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
               <h3 className="text-xl font-black text-gray-800 flex items-center gap-2"><Layout className="w-6 h-6 text-red-600" />NESTING OTTIMIZZATO</h3>
               <div className="flex gap-2">
                 <button onClick={()=>exportService.panelsToCsv(results)} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-green-500 transition-all"><FileSpreadsheet className="w-5 h-5 text-green-600" /><span>CSV</span></button>
-                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra))} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-red-500 transition-all"><Download className="w-5 h-5 text-red-600" /><span>PDF</span></button>
+                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra), coloreLastra)} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-red-500 transition-all"><Download className="w-5 h-5 text-red-600" /><span>PDF</span></button>
               </div>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-gray-200 shadow-2xl flex flex-col items-center justify-center relative">
