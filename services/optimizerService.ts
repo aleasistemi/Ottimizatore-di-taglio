@@ -97,7 +97,6 @@ export const optimizerService = {
         }
       });
 
-      // Sort decrescente per dimensione maggiore per ottimizzare l'ingombro iniziale delle colonne
       panelsToPlace.sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
 
       const sheets: OptimizedSheet[] = [];
@@ -108,17 +107,14 @@ export const optimizerService = {
 
         while (true) {
           const remW = sheetW - currentX;
-          
-          // Trova il candidato per definire la larghezza della prossima colonna
           let candidates = panelsToPlace.map((p, idx) => {
             let effW = null, useRot = false;
-            // Se ruotabile, proviamo entrambe le facce e prendiamo quella che "ingombra meno" in larghezza ma ci sta
             if (p.rot) {
               const minDim = Math.min(p.w, p.h);
               const maxDim = Math.max(p.w, p.h);
               if (minDim <= remW) {
                 effW = minDim;
-                useRot = p.w !== minDim; // Se la larghezza originale non è la minima, ruotiamo
+                useRot = p.w !== minDim;
               } else if (maxDim <= remW) {
                 effW = maxDim;
                 useRot = p.w !== maxDim;
@@ -131,7 +127,6 @@ export const optimizerService = {
 
           if (candidates.length === 0) break;
 
-          // Preferiamo il pezzo più largo tra i candidati per saturare la colonna
           candidates.sort((a, b) => (b.effW || 0) - (a.effW || 0));
           const chosen = candidates[0];
           const colWidth = chosen.effW || 0;
@@ -141,16 +136,11 @@ export const optimizerService = {
             const p = panelsToPlace[i];
             let placed = false;
 
-            // Logica di rotazione Intelligente:
-            // Se il pezzo è ruotabile, controlliamo se una delle due orientazioni entra NELLA LARGHEZZA della colonna attuale
             if (p.rot) {
-              // Orientamento A: p.w x p.h
               const fitsA = p.w <= colWidth && p.h <= sheetH - currentY;
-              // Orientamento B: p.h x p.w
               const fitsB = p.h <= colWidth && p.w <= sheetH - currentY;
 
               if (fitsA && fitsB) {
-                // Se entrambi entrano, scegliamo quello che occupa più larghezza della colonna (meno scarto laterale)
                 if (p.w >= p.h) {
                   placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
                   currentY += p.h + gap;
@@ -172,7 +162,6 @@ export const optimizerService = {
                 placed = true;
               }
             } else {
-              // Non ruotabile
               if (p.w <= colWidth && p.h <= sheetH - currentY) {
                 placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
                 currentY += p.h + gap;

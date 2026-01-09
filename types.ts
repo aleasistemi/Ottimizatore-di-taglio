@@ -25,7 +25,6 @@ export interface Client {
 export interface AleaColor {
   id: string;
   nome: string;
-  codiceHex?: string;
 }
 
 export interface CommessaArchiviata {

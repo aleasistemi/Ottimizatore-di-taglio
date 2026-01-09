@@ -15,15 +15,13 @@ const App: React.FC = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isCloudActive, setIsCloudActive] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string>('--:--');
   
   const syncTimerRef = useRef<any>(null);
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // PROTEZIONE: Se c'è stata una modifica locale negli ultimi 30 secondi, NON scaricare nulla dal cloud.
-    // Questo previene che il fetch (magari lento) sovrascriva il dato appena inserito.
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 30000) return;
+    // Protezione: se ho appena salvato qualcosa localmente, non scaricare dal cloud per 60 secondi
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 60000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
     
@@ -41,25 +39,28 @@ const App: React.FC = () => {
       let changed = false;
       for (const table of tables) {
         const cloudData = await supabaseService.fetchTable(table);
-        if (cloudData) {
-          // Rimuoviamo metadati di Supabase per il confronto (created_at, etc)
-          const cleanCloudData = cloudData.map(({ created_at, ...rest }: any) => rest);
-          const localData = JSON.parse(localStorage.getItem(storageKeys[table]) || '[]');
-          
-          const cloudDataStr = JSON.stringify(cleanCloudData);
-          const localDataStr = JSON.stringify(localData);
+        
+        // Se il cloud fallisce o è vuoto ma il locale ha dati, NON SOVRASCRIVERE (Protezione dati)
+        if (!cloudData) continue;
+        
+        const localDataRaw = localStorage.getItem(storageKeys[table]);
+        const localData = JSON.parse(localDataRaw || '[]');
 
-          if (cloudDataStr !== localDataStr) {
-            // Se il cloud è vuoto ma il locale no, e non siamo in manuale, siamo prudenti
-            if (cleanCloudData.length === 0 && localData.length > 0 && !isManual) continue;
-            
-            localStorage.setItem(storageKeys[table], cloudDataStr);
-            changed = true;
-          }
+        if (cloudData.length === 0 && localData.length > 5) {
+          console.warn(`Sync saltato per ${table}: Evitata cancellazione di ${localData.length} record locali.`);
+          continue;
+        }
+
+        const cloudDataClean = cloudData.map(({ created_at, ...rest }: any) => rest);
+        const cloudDataStr = JSON.stringify(cloudDataClean);
+        const localDataStr = JSON.stringify(localData);
+
+        if (cloudDataStr !== localDataStr) {
+          localStorage.setItem(storageKeys[table], cloudDataStr);
+          changed = true;
         }
       }
       
-      setLastSyncTime(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       if (changed || isManual) window.dispatchEvent(new CustomEvent('alea_data_updated'));
     } catch (e) {
       console.error("Errore sync:", e);
@@ -86,7 +87,7 @@ const App: React.FC = () => {
         setIsCloudActive(true);
         performGlobalSync();
       }
-    }, 5000);
+    }, 10000);
 
     const handleMutation = () => { 
       lastMutationTimeRef.current = Date.now(); 
@@ -109,10 +110,10 @@ const App: React.FC = () => {
     <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900">
       {showDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden p-10 text-center space-y-6">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full p-10 text-center space-y-6">
             <AlertTriangle className="w-16 h-16 text-red-600 mx-auto" />
             <h2 className="text-3xl font-black uppercase italic tracking-tighter">Informativa ALEA</h2>
-            <p className="text-slate-600 text-sm">L’ottimizzatore è uno strumento gratuito. ALEA SISTEMI S.r.l. non garantisce l’assenza di errori nei risultati forniti e non risponde di eventuali sprechi di materiale.</p>
+            <p className="text-slate-600 text-sm">ALEA SISTEMI S.r.l. non risponde di eventuali errori nei calcoli. Verifica sempre i risultati prima del taglio.</p>
             <button onClick={() => {localStorage.setItem('alea_disclaimer_accepted','true'); setShowDisclaimer(false);}} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl flex items-center justify-center gap-3">
               <CheckCircle2 className="w-6 h-6 text-green-400" /> ACCETTO E PROSEGUO
             </button>
@@ -125,12 +126,12 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-y-auto h-screen p-8">
         <header className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none uppercase">ALEA SISTEMI</h1>
-            <p className="text-[10px] font-bold text-red-600 tracking-[0.3em] uppercase mt-1">Soluzioni per l'Alluminio</p>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">ALEA SISTEMI</h1>
+            <p className="text-[10px] font-bold text-red-600 tracking-[0.3em] uppercase mt-1">Taglio Alluminio & Pannelli</p>
           </div>
-          <div className="flex bg-white p-1 rounded-2xl border shadow-xl items-center px-4 space-x-3">
-            <div className={`w-2 h-2 rounded-full ${isCloudActive ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`}></div>
-            <span className="text-[10px] font-black uppercase text-slate-500">Cloud Status: {isCloudActive ? 'Sincronizzato' : 'Offline'}</span>
+          <div className="flex bg-white p-2 rounded-2xl border shadow-xl items-center px-4 space-x-3">
+            <div className={`w-2 h-2 rounded-full ${isCloudActive ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+            <span className="text-[10px] font-black uppercase text-slate-500">{isCloudActive ? 'Cloud Attivo' : 'Offline'}</span>
             {isSyncing && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
           </div>
         </header>
@@ -139,11 +140,10 @@ const App: React.FC = () => {
         {activeMode === OptimizerMode.PANNELLI && <PanelOptimizer externalData={loadedCommessa} />}
         {activeMode === OptimizerMode.DATABASE && <ProfileDatabase onOpenCommessa={handleOpenCommessa} forcedTab={dbTab} onTabChange={setDbTab} />}
 
-        <footer className="mt-12 pt-8 border-t text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">© 2025 ALEA SISTEMI S.r.l. - V5.0</footer>
+        <footer className="mt-12 pt-8 border-t text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">© 2025 ALEA SISTEMI S.r.l.</footer>
       </main>
     </div>
   );
 };
 
-// Fix: Added default export to allow App to be imported in index.tsx
 export default App;

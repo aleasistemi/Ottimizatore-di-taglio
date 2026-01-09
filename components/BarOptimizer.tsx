@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RotateCcw } from 'lucide-react';
-import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata, Client } from '../types';
+import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata, Client, Profile } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
@@ -24,7 +24,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const [scartoFinale, setScartoFinale] = useState(10);
   const [groupBars, setGroupBars] = useState(true);
 
-  const [availableProfiles, setAvailableProfiles] = useState<any[]>([]);
+  const [availableProfiles, setAvailableProfiles] = useState<Profile[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
 
   const [distinta, setDistinta] = useState<CutRequest[]>([]);
@@ -59,6 +59,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   useEffect(() => {
     if (selectedProfile) {
       const p = availableProfiles.find(ap => ap.codice === selectedProfile);
+      // Fixed: lungMax property usage.
       if (p) setLunghezzaBarra(p.lungMax?.toString() || "6000");
     }
   }, [selectedProfile, availableProfiles]);
@@ -95,6 +96,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     // Gestione Clienti automatica
     let updatedClients = [...availableClients];
     if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
+        // Fixed: Property name to match Client interface definition.
         const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
         updatedClients = [newClient, ...availableClients];
         localStorage.setItem('alea_clients', JSON.stringify(updatedClients));

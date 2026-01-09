@@ -1,7 +1,7 @@
 
 import { Profile } from './types';
 
-// Fix: Changed PROFILI type to Omit<Profile, 'codice'> as the dictionary key represents the code and the values do not include the property.
+// Fixed property names to lungMax to match the Profile interface definition in types.ts
 export const PROFILI: Record<string, Omit<Profile, 'codice'>> = {
     "AL135150": {descr:"PROFILO ALEA LINE CAVA 8 135X150", lungMax:null},
     "CC6060": {descr:"CANALINA 60x60", lungMax:3000},

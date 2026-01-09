@@ -48,7 +48,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     const p = availablePanels.find(ap => ap.id === id);
     if (p) {
       setSelectedPanelId(id); setMateriale(p.materiale);
-      setLarghezzaLastra(p.lungDefault.toString()); setAltezzaLastra(p.altDefault.toString());
+      setLarghezzaLastra(p.lung_default.toString()); setAltezzaLastra(p.alt_default.toString());
     }
   };
 
@@ -88,7 +88,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     localStorage.setItem('alea_commesse', JSON.stringify(aggiornate));
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
     if (supabaseService.isInitialized()) await supabaseService.syncTable('commesse', aggiornate);
-    alert("Archiviato nel database cloud!");
+    alert("Archiviato con successo!");
   };
 
   const drawCanvas = (id: string, sheet: any, sheetW: number, sheetH: number) => {
