@@ -36,9 +36,13 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
 
   const loadLocalData = () => {
     const savedP = localStorage.getItem('alea_profiles');
-    if (savedP) setProfiles(JSON.parse(savedP));
-    else {
-      const defaults = Object.entries(INITIAL_PROFILI).map(([codice, p]) => ({ codice, descr: p.descr, lungMax: p.lungMax || 6000 }));
+    if (savedP) {
+      const parsed = JSON.parse(savedP);
+      setProfiles(parsed.sort((a: Profile, b: Profile) => a.codice.localeCompare(b.codice)));
+    } else {
+      const defaults = Object.entries(INITIAL_PROFILI)
+        .map(([codice, p]) => ({ codice, descr: p.descr, lungMax: p.lungMax || 6000 }))
+        .sort((a, b) => a.codice.localeCompare(b.codice));
       setProfiles(defaults);
       localStorage.setItem('alea_profiles', JSON.stringify(defaults));
     }
@@ -117,15 +121,17 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   };
 
   const saveToDbAndCloud = async (type: DbTab, data: any[]) => {
-    // Comunica ad App.tsx che abbiamo fatto una modifica locale, per bloccare la sync in entrata temporaneamente
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
     
     const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', clienti: 'alea_clients', commesse: 'alea_commesse' };
     const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', clienti: 'clients', commesse: 'commesse' };
     
-    localStorage.setItem(keys[type], JSON.stringify(data));
+    // Sort profiles before saving if applicable
+    const finalData = type === 'profili' ? [...data].sort((a, b) => a.codice.localeCompare(b.codice)) : data;
+    
+    localStorage.setItem(keys[type], JSON.stringify(finalData));
     if (isConnected) {
-        try { await supabaseService.syncTable(tables[type], data); } catch (e) {
+        try { await supabaseService.syncTable(tables[type], finalData); } catch (e) {
           console.error("Errore sync cloud:", e);
         }
     }
@@ -150,9 +156,9 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const editItem = (type: DbTab, item: any) => {
     setIsEditing(true);
     setIsAdding(true);
-    if (type === 'profili') setProfileForm(item);
-    if (type === 'pannelli') setPanelForm(item);
-    if (type === 'clienti') setClientForm(item);
+    if (type === 'profili') setProfileForm({ ...item });
+    if (type === 'pannelli') setPanelForm({ ...item });
+    if (type === 'clienti') setClientForm({ ...item });
   };
 
   const handleSaveProfile = async () => {
@@ -178,7 +184,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     setIsAdding(false); setIsEditing(false); setClientForm({ id: '', nome: '', note: '', dataAggiunta: new Date().toISOString() });
   };
 
-  const sqlCode = `-- SQL ALEA SISTEMI V4.6
+  const sqlCode = `-- SQL ALEA SISTEMI V4.7
 CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT NOT NULL, "lungMax" NUMERIC);
 CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT NOT NULL, descr TEXT NOT NULL, materiale TEXT, "lungDefault" NUMERIC, "altDefault" NUMERIC, "giraPezzoDefault" BOOLEAN);
 CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT NOT NULL, note TEXT, "dataAggiunta" TIMESTAMPTZ DEFAULT now());

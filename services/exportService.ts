@@ -78,14 +78,13 @@ export const exportService = {
           doc.rect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale, 'FD');
           
           if (p.w * scale > 15 && p.h * scale > 10) {
-            const label = `${p.w}x${p.h}`;
-            doc.setFontSize(8);
+            const label = `${p.w}x${p.h}${p.colore ? ` (${p.colore})` : ''}`;
+            doc.setFontSize(7);
             doc.setFont("helvetica", "bold");
             const txtWidth = doc.getTextWidth(label);
             const centerX = offsetX + (p.x + p.w / 2) * scale;
             const centerY = offsetY + (p.y + p.h / 2) * scale;
             
-            // Sfondo bianco protettivo
             doc.setFillColor(255, 255, 255);
             doc.rect(centerX - (txtWidth/2 + 2), centerY - 3, txtWidth + 4, 6, 'F');
             doc.setTextColor(0);
@@ -111,9 +110,13 @@ export const exportService = {
   },
 
   panelsToCsv: (results: PanelOptimizationResult) => {
-    let csv = "ALEA SISTEMI - Distinta Pannelli\nMateriale,Spessore,Larghezza,Altezza,Lastra ID,Ruotato\n";
+    let csv = "ALEA SISTEMI - Distinta Pannelli\nMateriale,Spessore,Colore,Larghezza,Altezza,Lastra ID,Ruotato\n";
     Object.values(results).forEach(group => {
-      group.sheets.forEach((sheet, sIdx) => { sheet.panels.forEach(p => { csv += `"${group.material}","${group.spessore}","${p.w}","${p.h}","${sIdx + 1}","${p.rotated ? 'Sì' : 'No'}"\n`; }); });
+      group.sheets.forEach((sheet, sIdx) => { 
+        sheet.panels.forEach(p => { 
+          csv += `"${group.material}","${group.spessore}","${p.colore || '-'}","${p.w}","${p.h}","${sIdx + 1}","${p.rotated ? 'Sì' : 'No'}"\n`; 
+        }); 
+      });
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

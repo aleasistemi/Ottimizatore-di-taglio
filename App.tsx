@@ -21,9 +21,8 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // Se abbiamo fatto modifiche locali negli ultimi 10 secondi, saltiamo la sync automatica
-    // per evitare che i dati vecchi dal cloud sovrascrivano quelli nuovi locali non ancora propagati.
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 10000) return;
+    // Blocco sync automatica se ci sono state modifiche locali recenti (20 secondi)
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 20000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
     
@@ -57,7 +56,7 @@ const App: React.FC = () => {
         window.dispatchEvent(new CustomEvent('alea_data_updated'));
       }
     } catch (e) {
-      console.error("Errore sincronizzazione automatica:", e);
+      console.error("Errore sync:", e);
     } finally {
       setIsSyncing(false);
     }
@@ -115,28 +114,15 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900">
       {showDisclaimer && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-300">
-            <div className="bg-red-600 p-8 text-white">
-              <div className="flex items-center gap-4 mb-2">
-                <AlertTriangle className="w-10 h-10" />
-                <h2 className="text-3xl font-black tracking-tighter italic uppercase">Informativa Legale</h2>
-              </div>
-              <p className="text-red-100 font-bold text-xs uppercase tracking-widest opacity-80">ALEA SISTEMI S.r.l. - Sede Legale</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+            <div className="bg-red-600 p-6 text-white flex items-center gap-3">
+              <AlertTriangle className="w-8 h-8" />
+              <h2 className="text-xl font-black uppercase tracking-tighter">Informativa Importante</h2>
             </div>
-            <div className="p-10 space-y-6">
-              <div className="space-y-4 text-slate-600 leading-relaxed text-sm">
-                <p>L’ottimizzatore è uno strumento gratuito messo a disposizione da <strong>ALEA SISTEMI S.r.l.</strong> per facilitare il calcolo dei tagli e l’organizzazione dei materiali.</p>
-                <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. ALEA SISTEMI S.r.l. non garantisce l’accuratezza nei risultati forniti.</p>
-                <p className="font-black text-slate-900">Proseguendo, l’utente dichiara di aver accettato integralmente queste condizioni.</p>
-              </div>
-              <button 
-                onClick={handleAcceptDisclaimer}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95"
-              >
-                <CheckCircle2 className="w-6 h-6 text-green-400" />
-                <span>ACCETTO E PROSEGUO</span>
-              </button>
+            <div className="p-8 space-y-4 text-slate-600 text-sm leading-relaxed">
+              <p>L'uso di questo ottimizzatore è sotto la responsabilità dell'utente. <strong>ALEA SISTEMI S.r.l.</strong> non risponde di eventuali errori di calcolo o sfridi imprevisti.</p>
+              <button onClick={handleAcceptDisclaimer} className="w-full bg-slate-900 text-white font-black py-4 rounded-xl mt-4">ACCETTO</button>
             </div>
           </div>
         </div>
@@ -167,17 +153,13 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <span className={`text-[9px] font-black uppercase tracking-tight ${isCloudActive ? 'text-blue-700' : 'text-slate-500'}`}>
-                  {isCloudActive ? 'Cloud Alea Sincronizzato' : 'Cloud Offline'}
+                  {isCloudActive ? 'Cloud Alea Attivo' : 'Cloud Offline'}
                 </span>
-                <span className="text-[8px] font-bold text-slate-400 tabular-nums">Aggiornato: {lastSyncTime}</span>
+                <span className="text-[8px] font-bold text-slate-400 tabular-nums">Sync: {lastSyncTime}</span>
               </div>
               {isSyncing && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
             </div>
-
-            <button 
-              onClick={goToCloudSettings}
-              className="flex items-center px-4 py-2 space-x-2 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all group"
-            >
+            <button onClick={goToCloudSettings} className="flex items-center px-4 py-2 space-x-2 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all group">
               <Settings className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 transition-colors" />
               <span className="text-[10px] font-black uppercase tracking-tight text-slate-500 group-hover:text-slate-900">Setup</span>
             </button>
@@ -187,15 +169,11 @@ const App: React.FC = () => {
         {activeMode === OptimizerMode.BARRE && <BarOptimizer externalData={loadedCommessa} />}
         {activeMode === OptimizerMode.PANNELLI && <PanelOptimizer externalData={loadedCommessa} />}
         {activeMode === OptimizerMode.DATABASE && (
-          <ProfileDatabase 
-            onOpenCommessa={handleOpenCommessa} 
-            forcedTab={dbTab} 
-            onTabChange={setDbTab}
-          />
+          <ProfileDatabase onOpenCommessa={handleOpenCommessa} forcedTab={dbTab} onTabChange={setDbTab} />
         )}
 
         <footer className="mt-12 pt-8 border-t border-gray-200 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - Software di Produzione V4.6
+          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - V4.7
         </footer>
       </main>
     </div>
