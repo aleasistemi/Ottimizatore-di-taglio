@@ -5,7 +5,7 @@ import { BarOptimizer } from './components/BarOptimizer';
 import { PanelOptimizer } from './components/PanelOptimizer';
 import { ProfileDatabase } from './components/ProfileDatabase';
 import { OptimizerMode, CommessaArchiviata } from './types';
-import { AlertTriangle, CheckCircle2, Settings, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { supabaseService } from './services/supabaseService';
 
 const App: React.FC = () => {
@@ -20,9 +20,7 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // Protezione: se ho appena salvato qualcosa localmente, non scaricare dal cloud per 60 secondi
     if (!isManual && Date.now() - lastMutationTimeRef.current < 60000) return;
-    
     if (isSyncing || !supabaseService.isInitialized()) return;
     
     setIsSyncing(true);
@@ -39,17 +37,12 @@ const App: React.FC = () => {
       let changed = false;
       for (const table of tables) {
         const cloudData = await supabaseService.fetchTable(table);
-        
-        // Se il cloud fallisce o è vuoto ma il locale ha dati, NON SOVRASCRIVERE (Protezione dati)
         if (!cloudData) continue;
         
         const localDataRaw = localStorage.getItem(storageKeys[table]);
         const localData = JSON.parse(localDataRaw || '[]');
 
-        if (cloudData.length === 0 && localData.length > 5) {
-          console.warn(`Sync saltato per ${table}: Evitata cancellazione di ${localData.length} record locali.`);
-          continue;
-        }
+        if (cloudData.length === 0 && localData.length > 5) continue;
 
         const cloudDataClean = cloudData.map(({ created_at, ...rest }: any) => rest);
         const cloudDataStr = JSON.stringify(cloudDataClean);
@@ -89,9 +82,7 @@ const App: React.FC = () => {
       }
     }, 10000);
 
-    const handleMutation = () => { 
-      lastMutationTimeRef.current = Date.now(); 
-    };
+    const handleMutation = () => { lastMutationTimeRef.current = Date.now(); };
     window.addEventListener('alea_local_mutation', handleMutation);
 
     return () => {
@@ -107,14 +98,24 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900">
+    <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900 font-['Inter']">
       {showDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full p-10 text-center space-y-6">
-            <AlertTriangle className="w-16 h-16 text-red-600 mx-auto" />
-            <h2 className="text-3xl font-black uppercase italic tracking-tighter">Informativa ALEA</h2>
-            <p className="text-slate-600 text-sm">ALEA SISTEMI S.r.l. non risponde di eventuali errori nei calcoli. Verifica sempre i risultati prima del taglio.</p>
-            <button onClick={() => {localStorage.setItem('alea_disclaimer_accepted','true'); setShowDisclaimer(false);}} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl flex items-center justify-center gap-3">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full p-10 text-center space-y-6 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-2">
+              <AlertTriangle className="w-10 h-10 text-red-600" />
+            </div>
+            <h2 className="text-3xl font-black uppercase italic tracking-tighter">DISCLAIMER D'USO</h2>
+            <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">
+              <p className="text-slate-700 font-bold text-sm leading-relaxed">
+                ALEA SISTEMI S.r.l. non risponde di eventuali errori nei calcoli. <br/>
+                Verifica sempre i risultati prima del taglio.
+              </p>
+            </div>
+            <button 
+              onClick={() => {localStorage.setItem('alea_disclaimer_accepted','true'); setShowDisclaimer(false);}} 
+              className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl flex items-center justify-center gap-3 hover:bg-slate-800 transition-all active:scale-[0.98]"
+            >
               <CheckCircle2 className="w-6 h-6 text-green-400" /> ACCETTO E PROSEGUO
             </button>
           </div>
@@ -130,7 +131,7 @@ const App: React.FC = () => {
             <p className="text-[10px] font-bold text-red-600 tracking-[0.3em] uppercase mt-1">Taglio Alluminio & Pannelli</p>
           </div>
           <div className="flex bg-white p-2 rounded-2xl border shadow-xl items-center px-4 space-x-3">
-            <div className={`w-2 h-2 rounded-full ${isCloudActive ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${isCloudActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-slate-300'}`}></div>
             <span className="text-[10px] font-black uppercase text-slate-500">{isCloudActive ? 'Cloud Attivo' : 'Offline'}</span>
             {isSyncing && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
           </div>
@@ -140,7 +141,7 @@ const App: React.FC = () => {
         {activeMode === OptimizerMode.PANNELLI && <PanelOptimizer externalData={loadedCommessa} />}
         {activeMode === OptimizerMode.DATABASE && <ProfileDatabase onOpenCommessa={handleOpenCommessa} forcedTab={dbTab} onTabChange={setDbTab} />}
 
-        <footer className="mt-12 pt-8 border-t text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">© 2025 ALEA SISTEMI S.r.l.</footer>
+        <footer className="mt-12 pt-8 border-t text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">© 2026 ALEA SISTEMI S.r.l.</footer>
       </main>
     </div>
   );
