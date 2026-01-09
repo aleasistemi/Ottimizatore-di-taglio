@@ -21,8 +21,9 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // Ridotto a 10 secondi per maggiore reattività
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 10000) return;
+    // PROTEZIONE: Se c'è stata una modifica locale negli ultimi 15 secondi, NON sincronizzare dal cloud
+    // per evitare che il dato cloud (non ancora aggiornato) sovrascriva quello locale appena creato.
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 15000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
     
@@ -72,6 +73,7 @@ const App: React.FC = () => {
       if (ok) performGlobalSync(true);
     }
 
+    // Polling di sincronizzazione ogni 5 secondi
     syncTimerRef.current = setInterval(() => {
       if (supabaseService.isInitialized()) {
         setIsCloudActive(true);
@@ -79,7 +81,9 @@ const App: React.FC = () => {
       }
     }, 5000);
 
-    const handleMutation = () => { lastMutationTimeRef.current = Date.now(); };
+    const handleMutation = () => { 
+      lastMutationTimeRef.current = Date.now(); 
+    };
     window.addEventListener('alea_local_mutation', handleMutation);
 
     return () => {
