@@ -22,6 +22,12 @@ export interface Client {
   dataAggiunta: string;
 }
 
+export interface AleaColor {
+  id: string;
+  nome: string;
+  codiceHex?: string;
+}
+
 export interface CommessaArchiviata {
   id: string;
   numero: string;
