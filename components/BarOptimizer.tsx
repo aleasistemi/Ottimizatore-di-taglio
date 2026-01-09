@@ -59,7 +59,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   useEffect(() => {
     if (selectedProfile) {
       const p = availableProfiles.find(ap => ap.codice === selectedProfile);
-      // Fixed: lungMax property usage.
       if (p) setLunghezzaBarra(p.lungMax?.toString() || "6000");
     }
   }, [selectedProfile, availableProfiles]);
@@ -93,17 +92,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     
-    // Gestione Clienti automatica
-    let updatedClients = [...availableClients];
-    if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
-        // Fixed: Property name to match Client interface definition.
-        const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
-        updatedClients = [newClient, ...availableClients];
-        localStorage.setItem('alea_clients', JSON.stringify(updatedClients));
-        setAvailableClients(updatedClients);
-        if (supabaseService.isInitialized()) await supabaseService.syncTable('clients', updatedClients);
-    }
-
     // Gestione Commessa
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
@@ -121,7 +109,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa e Cliente archiviati sul Cloud ALEA!");
+            alert("Commessa archiviata sul Cloud ALEA!");
         } catch (e) {
             alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
         }
@@ -176,8 +164,10 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
             <div className="space-y-5">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Cliente</label>
-                <input list="clients-list" type="text" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nome Cliente..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" />
-                <datalist id="clients-list">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
+                <select value={cliente} onChange={e => setCliente(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none font-bold uppercase">
+                  <option value="">Seleziona Cliente...</option>
+                  {availableClients.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Commessa / Rif.</label>

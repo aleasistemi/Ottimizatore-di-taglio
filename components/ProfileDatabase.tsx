@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial, AleaColor } from '../types';
 import { supabaseService } from '../services/supabaseService';
 
-type DbTab = 'profili' | 'pannelli' | 'colori' | 'commesse' | 'settings';
+type DbTab = 'profili' | 'pannelli' | 'colori' | 'clienti' | 'commesse' | 'settings';
 
 interface ProfileDatabaseProps {
   onOpenCommessa?: (commessa: CommessaArchiviata) => void;
@@ -21,16 +21,19 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const [panelMaterials, setPanelMaterials] = useState<PanelMaterial[]>([]);
   const [commesse, setCommesse] = useState<CommessaArchiviata[]>([]);
   const [colors, setColors] = useState<AleaColor[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   const [profileForm, setProfileForm] = useState<Profile>({ codice: '', descr: '', lungMax: 6000 });
   const [panelForm, setPanelForm] = useState<PanelMaterial>({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
   const [colorForm, setColorForm] = useState<AleaColor>({ id: '', nome: '' });
+  const [clientForm, setClientForm] = useState<Client>({ id: '', nome: '', note: '', dataAggiunta: '' });
 
   const loadLocalData = () => {
     setProfiles(JSON.parse(localStorage.getItem('alea_profiles') || '[]'));
     setPanelMaterials(JSON.parse(localStorage.getItem('alea_panel_materials') || '[]'));
     setCommesse(JSON.parse(localStorage.getItem('alea_commesse') || '[]'));
     setColors(JSON.parse(localStorage.getItem('alea_colors') || '[]'));
+    setClients(JSON.parse(localStorage.getItem('alea_clients') || '[]'));
   };
 
   useEffect(() => { loadLocalData(); }, []);
@@ -41,8 +44,8 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   }, []);
 
   const saveToDb = async (type: DbTab, data: any[]) => {
-    const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', commesse: 'alea_commesse', colori: 'alea_colors' };
-    const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', commesse: 'commesse', colori: 'colors' };
+    const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', commesse: 'alea_commesse', colori: 'alea_colors', clienti: 'alea_clients' };
+    const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', commesse: 'commesse', colori: 'colors', clienti: 'clients' };
     
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
     localStorage.setItem(keys[type], JSON.stringify(data));
@@ -76,16 +79,26 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     setIsAdding(false); setColorForm({ id: '', nome: '' });
   };
 
+  const handleSaveClient = async () => {
+    if (!clientForm.nome) return;
+    const id = clientForm.id || `CLI_${Date.now()}`;
+    const dataAggiunta = clientForm.dataAggiunta || new Date().toISOString();
+    const updated = [{ ...clientForm, id, dataAggiunta }, ...clients.filter(c => c.id !== id)];
+    await saveToDb('clienti', updated);
+    setIsAdding(false); setClientForm({ id: '', nome: '', note: '', dataAggiunta: '' });
+  };
+
   const deleteItem = async (type: DbTab, id: string) => {
     if (!confirm("Eliminare definitivamente l'elemento?")) return;
     let newData = [];
     if (type === 'profili') newData = profiles.filter(p => p.codice !== id);
     if (type === 'pannelli') newData = panelMaterials.filter(p => p.id !== id);
     if (type === 'colori') newData = colors.filter(c => c.id !== id);
+    if (type === 'clienti') newData = clients.filter(c => c.id !== id);
     if (type === 'commesse') newData = commesse.filter(c => c.id !== id);
     
-    const idCols: any = { profili: 'codice', pannelli: 'id', colori: 'id', commesse: 'id' };
-    const tables: any = { profili: 'profiles', pannelli: 'panel_materials', colori: 'colors', commesse: 'commesse' };
+    const idCols: any = { profili: 'codice', pannelli: 'id', colori: 'id', clienti: 'id', commesse: 'id' };
+    const tables: any = { profili: 'profiles', pannelli: 'panel_materials', colori: 'colors', clienti: 'clients', commesse: 'commesse' };
     
     if (supabaseService.isInitialized()) await supabaseService.deleteFromTable(tables[type], id, idCols[type]);
     await saveToDb(type, newData);
@@ -122,6 +135,7 @@ CREATE TABLE IF NOT EXISTS colors (
 CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
   nome TEXT,
+  note TEXT,
   "dataAggiunta" TEXT
 );
 
@@ -143,6 +157,7 @@ CREATE TABLE IF NOT EXISTS commesse (
           { id: 'profili', label: 'PROFILI', icon: Database },
           { id: 'pannelli', label: 'PANNELLI', icon: Square },
           { id: 'colori', label: 'COLORI', icon: Palette },
+          { id: 'clienti', label: 'CLIENTI', icon: Users },
           { id: 'commesse', label: 'ARCHIVIO', icon: Calendar },
           { id: 'settings', label: 'SETUP CLOUD', icon: Settings }
         ].map(tab => (
@@ -221,6 +236,19 @@ CREATE TABLE IF NOT EXISTS commesse (
                 </div>
               )}
 
+              {isAdding && activeTab === 'clienti' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input type="text" value={clientForm.nome} onChange={e=>setClientForm({...clientForm, nome: e.target.value})} placeholder="Nome Cliente..." className="p-3 border rounded-xl font-black uppercase" />
+                      <input type="text" value={clientForm.note || ''} onChange={e=>setClientForm({...clientForm, note: e.target.value})} placeholder="Note / Indirizzo..." className="p-3 border rounded-xl font-bold" />
+                   </div>
+                   <div className="flex gap-4">
+                      <button onClick={handleSaveClient} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg flex items-center justify-center gap-2"><Save className="w-5 h-5"/> Salva Cliente</button>
+                      <button onClick={()=>setIsAdding(false)} className="px-10 bg-white border rounded-xl font-black uppercase">Annulla</button>
+                   </div>
+                </div>
+              )}
+
               <div className="border rounded-[2rem] bg-white shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                    <thead className="bg-slate-50 border-b text-[10px] font-black uppercase text-slate-400">
@@ -253,6 +281,16 @@ CREATE TABLE IF NOT EXISTS commesse (
                            <td className="px-6 py-5 text-slate-400 text-[10px] uppercase">RAL Officina</td>
                            <td className="px-6 py-5 text-center flex justify-center gap-2">
                               <button onClick={()=>deleteItem('colori', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                           </td>
+                        </tr>
+                      ))}
+                      {activeTab === 'clienti' && clients.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
+                           <td className="px-6 py-5 uppercase font-black">{c.nome} <div className="text-[10px] text-slate-400 font-normal">{c.note}</div></td>
+                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase">Archiviato: {new Date(c.dataAggiunta).toLocaleDateString()}</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={()=>{setClientForm(c); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
+                              <button onClick={()=>deleteItem('clienti', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
                            </td>
                         </tr>
                       ))}

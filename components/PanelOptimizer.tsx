@@ -48,7 +48,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     const p = availablePanels.find(ap => ap.id === id);
     if (p) {
       setSelectedPanelId(id); setMateriale(p.materiale);
-      setLarghezzaLastra(p.lung_default.toString()); setAltezzaLastra(p.alt_default.toString());
+      setLarghezzaLastra(p.lungDefault.toString()); setAltezzaLastra(p.altDefault.toString());
     }
   };
 
@@ -127,8 +127,13 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
       <div className="space-y-6">
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
            <h3 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest"><FileText className="w-4 h-4" /> Dettagli Commessa</h3>
-           <input list="panel-clients-list" type="text" value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Cliente..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
-           <datalist id="panel-clients-list">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
+           <div className="space-y-1">
+             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Cliente</label>
+             <select value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500">
+                <option value="">Seleziona Cliente...</option>
+                {availableClients.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+             </select>
+           </div>
            <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} placeholder="Commessa..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
         </section>
 
