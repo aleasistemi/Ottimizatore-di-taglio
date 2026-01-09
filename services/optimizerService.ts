@@ -24,7 +24,7 @@ export const optimizerService = {
     for (const codice in grouped) {
       const pieces = [...grouped[codice]];
       const profileInfo = PROFILI[codice];
-      const maxLen = pieces[0]?.lungBarra || profileInfo.lungMax || 6000;
+      const maxLen = pieces[0]?.lungBarra || (profileInfo ? profileInfo.lungMax : null) || 6000;
 
       pieces.sort((a, b) => b.lung - a.lung);
 
@@ -68,7 +68,7 @@ export const optimizerService = {
       }
 
       results[codice] = {
-        descrizione: profileInfo.descr,
+        descrizione: profileInfo ? profileInfo.descr : "PROFILO GENERICO",
         barre: optimizedBarList
       };
     }
@@ -79,7 +79,6 @@ export const optimizerService = {
   optimizePanels: (requests: PanelCutRequest[], sheetW: number, sheetH: number, gap: number = 5): PanelOptimizationResult => {
     const results: PanelOptimizationResult = {};
 
-    // Group by material and thickness
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
       const key = `${r.materiale}___${r.spessore}`;
@@ -92,15 +91,13 @@ export const optimizerService = {
       const material = group[0].materiale;
       const spessore = group[0].spessore;
       
-      // Expand to individual panels
       let panelsToPlace: any[] = [];
       group.forEach(r => {
         for (let i = 0; i < r.quantita; i++) {
-          panelsToPlace.push({ w: r.lunghezza, h: r.altezza, rot: r.rotazione, id: Math.random() });
+          panelsToPlace.push({ w: r.lunghezza, h: r.altezza, rot: r.rotazione, colore: r.colore, id: Math.random() });
         }
       });
 
-      // Sort: largest dimension first
       panelsToPlace.sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
 
       const sheets: OptimizedSheet[] = [];
@@ -129,12 +126,12 @@ export const optimizerService = {
             const p = panelsToPlace[i];
             let placed = false;
             if (p.w <= colWidth && p.h <= sheetH - currentY) {
-              placedPanels.push({ material, spessore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+              placedPanels.push({ material, spessore, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
               currentY += p.h + gap;
               panelsToPlace.splice(i, 1);
               placed = true;
             } else if (p.rot && p.h <= colWidth && p.w <= sheetH - currentY) {
-              placedPanels.push({ material, spessore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+              placedPanels.push({ material, spessore, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
               currentY += p.w + gap;
               panelsToPlace.splice(i, 1);
               placed = true;
@@ -144,15 +141,13 @@ export const optimizerService = {
             if (currentY > sheetH - 1) break;
           }
 
-          // Safety check for first placement
           if (!placedPanels.some(s => s.x === currentX)) {
              const p = chosen.p;
              if (chosen.useRot ? p.w > sheetH : p.h > sheetH) {
-               // Too big
                panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
                continue;
              }
-             placedPanels.push({ material, spessore, x: currentX, y: 0, w: chosen.useRot ? p.h : p.w, h: chosen.useRot ? p.w : p.h, rotated: chosen.useRot });
+             placedPanels.push({ material, spessore, colore: p.colore, x: currentX, y: 0, w: chosen.useRot ? p.h : p.w, h: chosen.useRot ? p.w : p.h, rotated: chosen.useRot });
              panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
           }
 

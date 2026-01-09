@@ -21,8 +21,8 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // Blocco sync automatica se ci sono state modifiche locali recenti (20 secondi)
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 20000) return;
+    // Blocco sync automatica se ci sono state modifiche locali recenti (30 secondi per massima sicurezza sui pannelli)
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 30000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
     
@@ -115,14 +115,22 @@ const App: React.FC = () => {
     <div className="flex min-h-screen bg-gray-50 overflow-hidden text-slate-900">
       {showDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm">
-          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
-            <div className="bg-red-600 p-6 text-white flex items-center gap-3">
-              <AlertTriangle className="w-8 h-8" />
-              <h2 className="text-xl font-black uppercase tracking-tighter">Informativa Importante</h2>
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
+            <div className="bg-red-600 p-8 text-white flex items-center gap-4">
+              <AlertTriangle className="w-10 h-10" />
+              <h2 className="text-2xl font-black uppercase tracking-tighter italic">Informativa Legale</h2>
             </div>
-            <div className="p-8 space-y-4 text-slate-600 text-sm leading-relaxed">
-              <p>L'uso di questo ottimizzatore è sotto la responsabilità dell'utente. <strong>ALEA SISTEMI S.r.l.</strong> non risponde di eventuali errori di calcolo o sfridi imprevisti.</p>
-              <button onClick={handleAcceptDisclaimer} className="w-full bg-slate-900 text-white font-black py-4 rounded-xl mt-4">ACCETTO</button>
+            <div className="p-10 space-y-6 text-slate-600 text-sm leading-relaxed">
+              <p>L’ottimizzatore è uno strumento gratuito messo a disposizione da <strong>ALEA SISTEMI S.r.l.</strong> per facilitare il calcolo dei tagli e l’organizzazione dei materiali.</p>
+              <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. Nonostante la massima attenzione nella realizzazione del software, ALEA SISTEMI S.r.l. non garantisce l’accuratezza, la completezza o l’assenza di errori nei risultati forniti.</p>
+              <p>L’azienda non potrà essere ritenuta responsabile per eventuali danni, sprechi di materiale o altre conseguenze derivanti dall’uso dei dati generati dallo strumento.</p>
+              <p className="font-bold text-slate-900">Proseguendo, l’utente dichiara di aver letto e accettato queste condizioni.</p>
+              <button 
+                onClick={handleAcceptDisclaimer} 
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all active:scale-95"
+              >
+                ACCETTO E PROSEGUO
+              </button>
             </div>
           </div>
         </div>
@@ -173,7 +181,7 @@ const App: React.FC = () => {
         )}
 
         <footer className="mt-12 pt-8 border-t border-gray-200 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - V4.7
+          © {new Date().getFullYear()} ALEA SISTEMI S.r.l. - V4.8
         </footer>
       </main>
     </div>
