@@ -33,11 +33,15 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
+  const loadData = () => {
     const saved = localStorage.getItem('alea_panel_materials');
     if (saved) setAvailablePanels(JSON.parse(saved));
     const clients = localStorage.getItem('alea_clients');
     if (clients) setAvailableClients(JSON.parse(clients));
+  };
+
+  useEffect(() => {
+    loadData();
 
     if (externalData && externalData.tipo === 'pannelli') {
       setCliente(externalData.cliente);
@@ -45,6 +49,13 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       setDistinta(externalData.dettagli.distinta || []);
       setResults(externalData.dettagli.results || null);
     }
+
+    const handleUpdate = () => {
+      loadData();
+    };
+
+    window.addEventListener('alea_data_updated', handleUpdate);
+    return () => window.removeEventListener('alea_data_updated', handleUpdate);
   }, [externalData]);
 
   const handleSelectPanel = (id: string) => {
@@ -110,9 +121,9 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa e Cliente archiviati nel Cloud ALEA!");
+            alert("Commessa e Cliente archiviati sul Cloud ALEA!");
         } catch (e) {
-            alert("Salvata in locale, errore sincronizzazione Cloud.");
+            alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
         }
     } else {
         alert("Archiviata nell'archivio locale!");
@@ -171,8 +182,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
         <section className="bg-white p-6 rounded-[2rem] border border-gray-200 shadow-xl">
            <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2 uppercase tracking-tighter"><FileText className="w-5 h-5 text-red-600" /><span>Testata Commessa</span></h3>
            <div className="space-y-4">
-              <input list="clients-list" type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Nome Cliente..." />
-              <datalist id="clients-list">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
+              <input list="clients-list-p" type="text" value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Nome Cliente..." />
+              <datalist id="clients-list-p">{availableClients.map(c => <option key={c.id} value={c.nome} />)}</datalist>
               <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold" placeholder="Numero Commessa..." />
            </div>
            

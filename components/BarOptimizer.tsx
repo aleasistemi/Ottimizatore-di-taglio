@@ -31,11 +31,15 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const [results, setResults] = useState<OptimizationResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
     const profiles = localStorage.getItem('alea_profiles');
     if (profiles) setAvailableProfiles(JSON.parse(profiles));
     const clients = localStorage.getItem('alea_clients');
     if (clients) setAvailableClients(JSON.parse(clients));
+  };
+
+  useEffect(() => {
+    loadData();
 
     if (externalData && externalData.tipo === 'barre') {
       setCliente(externalData.cliente);
@@ -43,6 +47,13 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       setDistinta(externalData.dettagli.distinta || []);
       setResults(externalData.dettagli.results || null);
     }
+
+    const handleUpdate = () => {
+      loadData();
+    };
+
+    window.addEventListener('alea_data_updated', handleUpdate);
+    return () => window.removeEventListener('alea_data_updated', handleUpdate);
   }, [externalData]);
 
   useEffect(() => {
@@ -81,7 +92,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     
-    // Gestione Clienti
+    // Gestione Clienti automatica
     let updatedClients = [...availableClients];
     if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
         const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
@@ -108,12 +119,12 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa e Cliente archiviati nel Cloud ALEA!");
+            alert("Commessa e Cliente archiviati sul Cloud ALEA!");
         } catch (e) {
-            alert("Salvata in locale, errore sincronizzazione Cloud.");
+            alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
         }
     } else {
-        alert("Archiviata nell'archivio locale di questo PC!");
+        alert("Archiviata nell'archivio locale!");
     }
   };
 
