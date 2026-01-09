@@ -79,10 +79,10 @@ export const optimizerService = {
   optimizePanels: (requests: PanelCutRequest[], sheetW: number, sheetH: number, gap: number = 5): PanelOptimizationResult => {
     const results: PanelOptimizationResult = {};
 
-    // Raggruppa per materiale, spessore e colore
+    // Raggruppa per materiale (che ora include lo spessore nel nome) e colore
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
-      const key = `${r.materiale}___${r.spessore}___${r.colore}`;
+      const key = `${r.materiale}___${r.colore}`;
       if (!groupedRequests[key]) groupedRequests[key] = [];
       groupedRequests[key].push(r);
     });
@@ -90,7 +90,6 @@ export const optimizerService = {
     for (const key in groupedRequests) {
       const group = groupedRequests[key];
       const material = group[0].materiale;
-      const spessore = group[0].spessore;
       
       let panelsToPlace: any[] = [];
       group.forEach(r => {
@@ -127,12 +126,12 @@ export const optimizerService = {
             const p = panelsToPlace[i];
             let placed = false;
             if (p.w <= colWidth && p.h <= sheetH - currentY) {
-              placedPanels.push({ material: p.material, spessore, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+              placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
               currentY += p.h + gap;
               panelsToPlace.splice(i, 1);
               placed = true;
             } else if (p.rot && p.h <= colWidth && p.w <= sheetH - currentY) {
-              placedPanels.push({ material: p.material, spessore, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+              placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
               currentY += p.w + gap;
               panelsToPlace.splice(i, 1);
               placed = true;
@@ -148,7 +147,7 @@ export const optimizerService = {
                panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
                continue;
              }
-             placedPanels.push({ material: p.material, spessore, colore: p.colore, x: currentX, y: 0, w: chosen.useRot ? p.h : p.w, h: chosen.useRot ? p.w : p.h, rotated: chosen.useRot });
+             placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: 0, w: chosen.useRot ? p.h : p.w, h: chosen.useRot ? p.w : p.h, rotated: chosen.useRot });
              panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
           }
 
@@ -166,7 +165,7 @@ export const optimizerService = {
         });
       }
 
-      results[key] = { material, spessore, sheets };
+      results[key] = { material, sheets };
     }
 
     return results;

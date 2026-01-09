@@ -10,7 +10,6 @@ export interface PanelMaterial {
   codice: string;
   descr: string;
   materiale: string;
-  spessore: string; // Aggiunto spessore a livello di materiale/lastra
   lungDefault: number;
   altDefault: number;
   giraPezzoDefault: boolean;
@@ -29,7 +28,7 @@ export interface CommessaArchiviata {
   cliente: string;
   data: string;
   tipo: 'barre' | 'pannelli';
-  dettagli: any; // Salva la distinta e i risultati
+  dettagli: any;
 }
 
 export interface CutRequest {
@@ -62,11 +61,9 @@ export interface OptimizationResult {
   };
 }
 
-// Panel Types
 export interface PanelCutRequest {
   id: string;
   materiale: string;
-  spessore: string;
   colore: string;
   lunghezza: number;
   altezza: number;
@@ -76,7 +73,6 @@ export interface PanelCutRequest {
 
 export interface PlacedPanel {
   material: string;
-  spessore: string;
   colore?: string;
   x: number;
   y: number;
@@ -94,7 +90,6 @@ export interface OptimizedSheet {
 export interface PanelOptimizationResult {
   [key: string]: {
     material: string;
-    spessore: string;
     sheets: OptimizedSheet[];
   };
 }

@@ -101,11 +101,12 @@ export const exportService = {
     const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "ALEA_Export_Barre.csv"; link.click();
   },
 
+  // Fix: removed non-existent property access 'spessore' and updated CSV header to match PlacedPanel interface
   panelsToCsv: (results: PanelOptimizationResult) => {
-    let csv = "Materiale;Spessore;Larghezza;Altezza;Rotazione\n";
+    let csv = "Materiale;Larghezza;Altezza;Rotazione\n";
     Object.values(results).forEach(g => {
       g.sheets.forEach(s => {
-        s.panels.forEach(p => { csv += `${p.material};${p.spessore};${p.w};${p.h};${p.rotated}\n`; });
+        s.panels.forEach(p => { csv += `${p.material};${p.w};${p.h};${p.rotated}\n`; });
       });
     });
     const blob = new Blob([csv], { type: 'text/csv' });
