@@ -26,7 +26,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   const [rotazione, setRotazione] = useState(true);
 
   const [availablePanels, setAvailablePanels] = useState<PanelMaterial[]>([]);
-  const [availableThicknesses, setAvailableThicknesses] = useState<string[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [distinta, setDistinta] = useState<PanelCutRequest[]>([]);
   const [results, setResults] = useState<PanelOptimizationResult | null>(null);
@@ -65,9 +64,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       setMateriale(p.materiale);
       setLarghezzaLastra(p.lungDefault.toString());
       setAltezzaLastra(p.altDefault.toString());
-      const thicknesses = p.spessori.split(',').map(s => s.trim());
-      setAvailableThicknesses(thicknesses);
-      if (thicknesses.length > 0) setSpessore(thicknesses[0]);
+      // Applica il default di rotazione dall'archivio
+      setRotazione(p.giraPezzoDefault);
     }
   };
 
@@ -86,6 +84,8 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
       rotazione
     };
     setDistinta(prev => [...prev, newCut]);
+    
+    // Pulizia campi: NON puliamo lo spessore come richiesto
     setLunghezza('');
     setAltezza('');
     setQuantita(1);
@@ -94,7 +94,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     
-    // Gestione Clienti
     let updatedClients = [...availableClients];
     if (cliente && !availableClients.find(c => c.nome.toLowerCase() === cliente.toLowerCase())) {
         const newClient: Client = { id: Math.random().toString(36).substr(2, 9), nome: cliente, dataAggiunta: new Date().toISOString() };
@@ -104,7 +103,6 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
         if (supabaseService.isInitialized()) await supabaseService.syncTable('clients', updatedClients);
     }
 
-    // Gestione Commessa
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
     const nuovaCommessa: CommessaArchiviata = {
@@ -121,12 +119,12 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa e Cliente archiviati sul Cloud ALEA!");
+            alert("Commessa archiviata sul Cloud!");
         } catch (e) {
-            alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
+            alert("Errore Cloud. Salvata localmente.");
         }
     } else {
-        alert("Archiviata nell'archivio locale!");
+        alert("Archiviata localmente!");
     }
   };
 
@@ -210,7 +208,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 <input type="text" value={materiale} onChange={e=>setMateriale(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold" />
               </div>
               <div>
-                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Spessore</label>
+                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Spessore (mm)</label>
                 <input type="text" value={spessore} onChange={e=>setSpessore(e.target.value)} placeholder="es. 3" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-black" />
               </div>
             </div>
@@ -227,7 +225,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 </label>
               </div>
             </div>
-            <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-red-700 transition-all flex items-center justify-center gap-3">
+            <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-red-700 transition-all flex items-center justify-center gap-3 active:scale-95">
               <Plus className="w-6 h-6" /><span>AGGIUNGI A DISTINTA</span>
             </button>
           </div>
@@ -250,7 +248,7 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {distinta.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-medium">Nessun pannello inserito.</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-medium">Nessun pezzo inserito in questa distinta.</td></tr>
                   ) : (
                     distinta.map(cut => (
                       <tr key={cut.id} className="hover:bg-slate-50 font-bold group">
@@ -274,10 +272,10 @@ export const PanelOptimizer: React.FC<PanelOptimizerProps> = ({ externalData }) 
         {results && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <h3 className="text-xl font-black text-gray-800 flex items-center gap-2"><Layout className="w-6 h-6 text-red-600" />NESTING PROFESSIONALE ALEA</h3>
+              <h3 className="text-xl font-black text-gray-800 flex items-center gap-2"><Layout className="w-6 h-6 text-red-600" />NESTING OTTIMIZZATO</h3>
               <div className="flex gap-2">
-                <button onClick={()=>exportService.panelsToCsv(results)} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-green-500 transition-all"><FileSpreadsheet className="w-5 h-5 text-green-600" /><span>EXPORT CSV</span></button>
-                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra))} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-red-500 transition-all"><Download className="w-5 h-5 text-red-600" /><span>STAMPA SCHEMI</span></button>
+                <button onClick={()=>exportService.panelsToCsv(results)} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-green-500 transition-all"><FileSpreadsheet className="w-5 h-5 text-green-600" /><span>CSV</span></button>
+                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra))} className="bg-white border-2 border-slate-200 px-6 py-3 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:border-red-500 transition-all"><Download className="w-5 h-5 text-red-600" /><span>PDF</span></button>
               </div>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-gray-200 shadow-2xl flex flex-col items-center justify-center relative">

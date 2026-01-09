@@ -10,9 +10,9 @@ export interface PanelMaterial {
   codice: string;
   descr: string;
   materiale: string;
-  spessori: string; // Es: "2, 3, 4, 5"
   lungDefault: number;
   altDefault: number;
+  giraPezzoDefault: boolean;
 }
 
 export interface Client {
