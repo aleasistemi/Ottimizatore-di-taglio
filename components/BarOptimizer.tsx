@@ -311,10 +311,8 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><Boxes className="w-6 h-6 text-red-600" />RISULTATI</h3>
                   <div className="flex gap-2">
-                    {/* // Fixed: Removed unused groupBars argument to match exportService.toCsv definition */}
-                    <button onClick={() => exportService.toCsv(results)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-slate-800 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4 text-green-600" /><span>CSV</span></button>
-                    {/* // Fixed: Removed unused groupBars argument to match exportService.toPdf definition */}
-                    <button onClick={() => exportService.toPdf(results, cliente, commessa)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-red-500 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><Download className="w-4 h-4 text-red-600" /><span>STAMPA PDF</span></button>
+                    <button onClick={() => exportService.toCsv(results, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-slate-800 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4 text-green-600" /><span>CSV</span></button>
+                    <button onClick={() => exportService.toPdf(results, cliente, commessa, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-red-500 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><Download className="w-4 h-4 text-red-600" /><span>STAMPA PDF</span></button>
                   </div>
                </div>
                {(Object.entries(results) as [string, any][]).map(([code, data]) => {

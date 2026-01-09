@@ -6,11 +6,10 @@ export interface Profile {
 }
 
 export interface PanelMaterial {
-  id: string; // Utilizzeremo il codice come ID o un ID fisso per evitare reset sync
+  id: string;
   codice: string;
   descr: string;
   materiale: string;
-  spessore: string; // Aggiunto spessore a livello di materiale/lastra
   lungDefault: number;
   altDefault: number;
   giraPezzoDefault: boolean;
@@ -29,7 +28,7 @@ export interface CommessaArchiviata {
   cliente: string;
   data: string;
   tipo: 'barre' | 'pannelli';
-  dettagli: any;
+  dettagli: any; // Salva la distinta e i risultati
 }
 
 export interface CutRequest {
@@ -51,7 +50,6 @@ export interface OptimizedBar {
   riepilogo: string;
 }
 
-// Added missing GroupedBarResult for UI aggregation
 export interface GroupedBarResult extends OptimizedBar {
   count: number;
 }
@@ -63,6 +61,7 @@ export interface OptimizationResult {
   };
 }
 
+// Panel Types
 export interface PanelCutRequest {
   id: string;
   materiale: string;
