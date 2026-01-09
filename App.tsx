@@ -21,9 +21,9 @@ const App: React.FC = () => {
   const lastMutationTimeRef = useRef<number>(0);
 
   const performGlobalSync = async (isManual = false) => {
-    // PROTEZIONE: Se c'è stata una modifica locale negli ultimi 15 secondi, NON sincronizzare dal cloud
-    // per evitare che il dato cloud (non ancora aggiornato) sovrascriva quello locale appena creato.
-    if (!isManual && Date.now() - lastMutationTimeRef.current < 15000) return;
+    // PROTEZIONE: Aumentata a 30 secondi per dare tempo al cloud lento di processare l'upsert
+    // prima di tentare un fetch che potrebbe restituire dati vecchi e cancellare quelli nuovi.
+    if (!isManual && Date.now() - lastMutationTimeRef.current < 30000) return;
     
     if (isSyncing || !supabaseService.isInitialized()) return;
     
@@ -73,7 +73,6 @@ const App: React.FC = () => {
       if (ok) performGlobalSync(true);
     }
 
-    // Polling di sincronizzazione ogni 5 secondi
     syncTimerRef.current = setInterval(() => {
       if (supabaseService.isInitialized()) {
         setIsCloudActive(true);

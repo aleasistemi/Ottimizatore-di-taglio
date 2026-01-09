@@ -79,7 +79,6 @@ export const optimizerService = {
   optimizePanels: (requests: PanelCutRequest[], sheetW: number, sheetH: number, gap: number = 5): PanelOptimizationResult => {
     const results: PanelOptimizationResult = {};
 
-    // Raggruppa per materiale (che ora include lo spessore nel nome) e colore
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
       const key = `${r.materiale}___${r.colore}`;
@@ -98,6 +97,7 @@ export const optimizerService = {
         }
       });
 
+      // Sort decrescente per dimensione maggiore per ottimizzare l'ingombro iniziale delle colonne
       panelsToPlace.sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
 
       const sheets: OptimizedSheet[] = [];
@@ -108,15 +108,30 @@ export const optimizerService = {
 
         while (true) {
           const remW = sheetW - currentX;
+          
+          // Trova il candidato per definire la larghezza della prossima colonna
           let candidates = panelsToPlace.map((p, idx) => {
             let effW = null, useRot = false;
-            if (p.w <= remW) effW = p.w;
-            else if (p.rot && p.h <= remW) { effW = p.h; useRot = true; }
+            // Se ruotabile, proviamo entrambe le facce e prendiamo quella che "ingombra meno" in larghezza ma ci sta
+            if (p.rot) {
+              const minDim = Math.min(p.w, p.h);
+              const maxDim = Math.max(p.w, p.h);
+              if (minDim <= remW) {
+                effW = minDim;
+                useRot = p.w !== minDim; // Se la larghezza originale non è la minima, ruotiamo
+              } else if (maxDim <= remW) {
+                effW = maxDim;
+                useRot = p.w !== maxDim;
+              }
+            } else {
+              if (p.w <= remW) effW = p.w;
+            }
             return { idx, p, effW, useRot };
           }).filter(c => c.effW !== null);
 
           if (candidates.length === 0) break;
 
+          // Preferiamo il pezzo più largo tra i candidati per saturare la colonna
           candidates.sort((a, b) => (b.effW || 0) - (a.effW || 0));
           const chosen = candidates[0];
           const colWidth = chosen.effW || 0;
@@ -125,30 +140,49 @@ export const optimizerService = {
           for (let i = 0; i < panelsToPlace.length; ) {
             const p = panelsToPlace[i];
             let placed = false;
-            if (p.w <= colWidth && p.h <= sheetH - currentY) {
-              placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-              currentY += p.h + gap;
-              panelsToPlace.splice(i, 1);
-              placed = true;
-            } else if (p.rot && p.h <= colWidth && p.w <= sheetH - currentY) {
-              placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
-              currentY += p.w + gap;
-              panelsToPlace.splice(i, 1);
-              placed = true;
-            } else {
-              i++;
-            }
-            if (currentY > sheetH - 1) break;
-          }
 
-          if (!placedPanels.some(s => s.x === currentX)) {
-             const p = chosen.p;
-             if (chosen.useRot ? p.w > sheetH : p.h > sheetH) {
-               panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
-               continue;
-             }
-             placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: 0, w: chosen.useRot ? p.h : p.w, h: chosen.useRot ? p.w : p.h, rotated: chosen.useRot });
-             panelsToPlace.splice(panelsToPlace.findIndex(pp => pp.id === p.id), 1);
+            // Logica di rotazione Intelligente:
+            // Se il pezzo è ruotabile, controlliamo se una delle due orientazioni entra NELLA LARGHEZZA della colonna attuale
+            if (p.rot) {
+              // Orientamento A: p.w x p.h
+              const fitsA = p.w <= colWidth && p.h <= sheetH - currentY;
+              // Orientamento B: p.h x p.w
+              const fitsB = p.h <= colWidth && p.w <= sheetH - currentY;
+
+              if (fitsA && fitsB) {
+                // Se entrambi entrano, scegliamo quello che occupa più larghezza della colonna (meno scarto laterale)
+                if (p.w >= p.h) {
+                  placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+                  currentY += p.h + gap;
+                } else {
+                  placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+                  currentY += p.w + gap;
+                }
+                panelsToPlace.splice(i, 1);
+                placed = true;
+              } else if (fitsA) {
+                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+                currentY += p.h + gap;
+                panelsToPlace.splice(i, 1);
+                placed = true;
+              } else if (fitsB) {
+                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+                currentY += p.w + gap;
+                panelsToPlace.splice(i, 1);
+                placed = true;
+              }
+            } else {
+              // Non ruotabile
+              if (p.w <= colWidth && p.h <= sheetH - currentY) {
+                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+                currentY += p.h + gap;
+                panelsToPlace.splice(i, 1);
+                placed = true;
+              }
+            }
+
+            if (!placed) i++;
+            if (currentY > sheetH - 1) break;
           }
 
           currentX += colWidth + gap;
