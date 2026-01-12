@@ -106,11 +106,13 @@ const App: React.FC = () => {
               <AlertTriangle className="w-10 h-10 text-red-600" />
             </div>
             <h2 className="text-3xl font-black uppercase italic tracking-tighter">DISCLAIMER D'USO</h2>
-            <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">
-              <p className="text-slate-700 font-bold text-sm leading-relaxed">
-                ALEA SISTEMI S.r.l. non risponde di eventuali errori nei calcoli. <br/>
-                Verifica sempre i risultati prima del taglio.
-              </p>
+            <div className="bg-slate-50 p-8 rounded-2xl border-2 border-slate-100 text-left">
+              <div className="space-y-4 text-slate-700 font-medium text-sm leading-relaxed">
+                <p>L’ottimizzatore è uno strumento gratuito messo a disposizione da <strong>ALEA SISTEMI S.r.l.</strong> per facilitare il calcolo dei tagli e l’organizzazione dei materiali.</p>
+                <p>L’utilizzo avviene sotto la piena responsabilità dell’utente. Nonostante la massima attenzione nella realizzazione del software, ALEA SISTEMI S.r.l. non garantisce l’accuratezza, la completezza o l’assenza di errori nei risultati forniti.</p>
+                <p>L’azienda non potrà essere ritenuta responsabile per eventuali danni, sprechi di materiale o altre conseguenze derivanti dall’uso dei dati generati dallo strumento.</p>
+                <p className="font-bold italic">Proseguendo, l’utente dichiara di aver letto e accettato queste condizioni.</p>
+              </div>
             </div>
             <button 
               onClick={() => {localStorage.setItem('alea_disclaimer_accepted','true'); setShowDisclaimer(false);}} 

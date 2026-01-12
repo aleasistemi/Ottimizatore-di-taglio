@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users, FileSpreadsheet, Upload, CheckCircle2 } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users, FileSpreadsheet, Upload, CheckCircle2, PlayCircle, ExternalLink } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial, AleaColor } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
@@ -233,6 +233,20 @@ CREATE TABLE IF NOT EXISTS commesse (
               <div className="text-center space-y-2">
                 <h3 className="text-3xl font-black uppercase tracking-tighter">Setup Cloud</h3>
                 <p className="text-slate-400 text-sm">Configura Supabase per sincronizzare l'officina.</p>
+              </div>
+
+              {/* Tasto Istruzioni Video richiesto */}
+              <div className="flex justify-center">
+                 <a 
+                   href="https://vimeo.com/1153543551" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="flex items-center gap-3 bg-green-600 text-white px-8 py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-green-700 transition-all active:scale-95 text-xs tracking-widest"
+                 >
+                   <PlayCircle className="w-6 h-6" />
+                   GUARDA LE ISTRUZIONI PER COLLEGARE IL CLOUD
+                   <ExternalLink className="w-4 h-4 opacity-50" />
+                 </a>
               </div>
 
               <div className="bg-slate-50 p-8 rounded-[2rem] border-2 border-slate-100 space-y-4 shadow-inner">
