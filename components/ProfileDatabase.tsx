@@ -59,7 +59,6 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     return () => window.removeEventListener('alea_data_updated', handleUpdate);
   }, []);
 
-  // Calcolo degli anni disponibili nell'archivio
   const availableYears = useMemo(() => {
     const years = new Set<string>();
     years.add(new Date().getFullYear().toString());
@@ -72,7 +71,6 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [commesse]);
 
-  // Filtra commesse per l'anno selezionato
   const filteredCommesse = useMemo(() => {
     return commesse.filter(c => {
       const year = new Date(c.data).getFullYear().toString();
@@ -101,53 +99,6 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     const updated = [profileForm, ...profiles.filter(p => p.codice !== profileForm.codice)];
     await saveToDb('profili', updated);
     setIsAdding(false); setProfileForm({ codice: '', descr: '', lungMax: 6000 });
-  };
-
-  const handleImportXlsx = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
-
-        const importedProfiles: Profile[] = data
-          .filter(row => row[0]) 
-          .map(row => ({
-            codice: String(row[0]).toUpperCase().trim(),
-            descr: String(row[1] || '').trim(),
-            lungMax: row[2] ? parseInt(row[2]) : 6000
-          }));
-
-        if (importedProfiles.length === 0) {
-          alert("Nessun profilo trovato nel file.");
-          return;
-        }
-
-        const existingMap = new Map(profiles.map(p => [p.codice, p]));
-        importedProfiles.forEach(p => existingMap.set(p.codice, p));
-        
-        const finalData = Array.from(existingMap.values());
-        await saveToDb('profili', finalData);
-        alert(`Importati correttamente ${importedProfiles.length} profili!`);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (err) {
-        console.error(err);
-        alert("Errore durante l'importazione del file Excel. Verifica il formato.");
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const handleConnectCloud = () => {
-    localStorage.setItem('alea_sb_url', sbUrl);
-    localStorage.setItem('alea_sb_key', sbKey);
-    window.location.reload();
   };
 
   const handleSavePanel = async () => {
@@ -191,44 +142,93 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     await saveToDb(type, newData);
   };
 
+  const handleImportXlsx = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+        const importedProfiles: Profile[] = data.filter(row => row[0]).map(row => ({
+          codice: String(row[0]).toUpperCase().trim(),
+          descr: String(row[1] || '').trim(),
+          lungMax: row[2] ? parseInt(row[2]) : 6000
+        }));
+        if (importedProfiles.length === 0) { alert("Nessun profilo trovato."); return; }
+        const existingMap = new Map(profiles.map(p => [p.codice, p]));
+        importedProfiles.forEach(p => existingMap.set(p.codice, p));
+        await saveToDb('profili', Array.from(existingMap.values()));
+        alert(`Importati correttamente ${importedProfiles.length} profili!`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err) { alert("Errore Excel."); }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleConnectCloud = () => {
+    localStorage.setItem('alea_sb_url', sbUrl);
+    localStorage.setItem('alea_sb_key', sbKey);
+    window.location.reload();
+  };
+
   const handleDeleteBulkCommesse = async () => {
     if (selectedCommessaIds.length === 0) return;
-    if (!confirm(`Sei sicuro di voler eliminare definitivamente ${selectedCommessaIds.length} commesse? L'azione non è reversibile.`)) return;
-
+    if (!confirm(`Eliminare ${selectedCommessaIds.length} commesse?`)) return;
     const updatedCommesse = commesse.filter(c => !selectedCommessaIds.includes(c.id));
-    
     if (supabaseService.isInitialized()) {
-      for (const id of selectedCommessaIds) {
-        await supabaseService.deleteFromTable('commesse', id, 'id');
-      }
+      for (const id of selectedCommessaIds) await supabaseService.deleteFromTable('commesse', id, 'id');
     }
-    
     await saveToDb('commesse', updatedCommesse);
     setSelectedCommessaIds([]);
-    alert(`${selectedCommessaIds.length} commesse eliminate correttamente.`);
   };
 
   const toggleSelectAll = () => {
-    if (selectedCommessaIds.length === filteredCommesse.length) {
-      setSelectedCommessaIds([]);
-    } else {
-      setSelectedCommessaIds(filteredCommesse.map(c => c.id));
-    }
+    if (selectedCommessaIds.length === filteredCommesse.length) setSelectedCommessaIds([]);
+    else setSelectedCommessaIds(filteredCommesse.map(c => c.id));
   };
 
   const toggleSelectCommessa = (id: string) => {
-    setSelectedCommessaIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    setSelectedCommessaIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const sqlSetupScript = `
 -- ESEGUI QUESTO SCRIPT PER CONFIGURARE UN NUOVO DATABASE SUPABASE
-CREATE TABLE IF NOT EXISTS profiles (codice TEXT PRIMARY KEY, descr TEXT, "lungMax" INTEGER);
-CREATE TABLE IF NOT EXISTS panel_materials (id TEXT PRIMARY KEY, codice TEXT, materiale TEXT, descr TEXT, "lungDefault" INTEGER, "altDefault" INTEGER, "giraPezzoDefault" BOOLEAN DEFAULT true);
-CREATE TABLE IF NOT EXISTS colors (id TEXT PRIMARY KEY, nome TEXT);
-CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nome TEXT, note TEXT, "dataAggiunta" TEXT);
-CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente TEXT, data TEXT, tipo TEXT, dettagli JSONB);
+CREATE TABLE IF NOT EXISTS profiles (
+  codice TEXT PRIMARY KEY,
+  descr TEXT,
+  "lungMax" INTEGER
+);
+CREATE TABLE IF NOT EXISTS panel_materials (
+  id TEXT PRIMARY KEY,
+  codice TEXT,
+  materiale TEXT,
+  descr TEXT,
+  "lungDefault" INTEGER,
+  "altDefault" INTEGER,
+  "giraPezzoDefault" BOOLEAN DEFAULT true
+);
+CREATE TABLE IF NOT EXISTS colors (
+  id TEXT PRIMARY KEY,
+  nome TEXT
+);
+CREATE TABLE IF NOT EXISTS clients (
+  id TEXT PRIMARY KEY,
+  nome TEXT,
+  note TEXT,
+  "dataAggiunta" TEXT
+);
+CREATE TABLE IF NOT EXISTS commesse (
+  id TEXT PRIMARY KEY,
+  numero TEXT,
+  cliente TEXT,
+  data TEXT,
+  tipo TEXT,
+  dettagli JSONB
+);
   `.trim();
 
   return (
@@ -252,7 +252,7 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
         {activeTab === 'settings' ? (
            <div className="max-w-3xl mx-auto space-y-10 animate-in fade-in duration-500">
               <div className="text-center space-y-2">
-                <h3 className="text-3xl font-black uppercase tracking-tighter">Setup Cloud</h3>
+                <h3 className="text-3xl font-black uppercase tracking-tighter text-slate-900">Setup Cloud</h3>
                 <p className="text-slate-400 text-sm">Configura Supabase per sincronizzare l'officina.</p>
               </div>
               <div className="flex justify-center">
@@ -273,6 +273,13 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                   <CheckCircle2 className="w-5 h-5 text-green-400" /> CONNETTI E SINCRONIZZA
                 </button>
               </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-red-600 font-black text-xs uppercase"><Code className="w-5 h-5" /> Inizializzazione Database (SQL Editor)</div>
+                <div className="bg-slate-900 p-6 rounded-[2rem] text-white relative">
+                  <button onClick={() => { navigator.clipboard.writeText(sqlSetupScript); alert("Script SQL copiato!"); }} className="absolute top-4 right-4 bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all"><Copy className="w-4 h-4" /></button>
+                  <pre className="text-[10px] font-mono leading-tight text-blue-300 overflow-x-auto whitespace-pre-wrap">{sqlSetupScript}</pre>
+                </div>
+              </div>
            </div>
         ) : (
            <div className="space-y-6">
@@ -286,19 +293,12 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                        <div className="flex-1 sm:w-32">
                           <label className="text-[9px] font-black text-slate-400 uppercase ml-2 block">Seleziona Anno</label>
-                          <select 
-                            value={selectedYear} 
-                            onChange={e => {setSelectedYear(e.target.value); setSelectedCommessaIds([]);}} 
-                            className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-xs outline-none cursor-pointer"
-                          >
+                          <select value={selectedYear} onChange={e => {setSelectedYear(e.target.value); setSelectedCommessaIds([]);}} className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-xs outline-none cursor-pointer">
                             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                        </div>
                        {selectedCommessaIds.length > 0 && (
-                          <button 
-                            onClick={handleDeleteBulkCommesse}
-                            className="bg-red-50 text-red-600 border-2 border-red-100 px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all animate-in zoom-in-95"
-                          >
+                          <button onClick={handleDeleteBulkCommesse} className="bg-red-50 text-red-600 border-2 border-red-100 px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all animate-in zoom-in-95">
                             Elimina {selectedCommessaIds.length}
                           </button>
                        )}
@@ -322,7 +322,7 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                  </div>
               </div>
 
-              {/* Form Aggiunta Profili, Pannelli, Colori, Clienti (Invariati) */}
+              {/* Form Aggiunta Profili */}
               {isAdding && activeTab === 'profili' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95">
                    <input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} placeholder="Codice Profilo..." className="p-3 border rounded-xl font-black" />
@@ -334,7 +334,47 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                    </div>
                 </div>
               )}
-              {/* Altri form aggiunta omessi per brevità, sono identici a prima */}
+
+              {/* Form Aggiunta Pannelli */}
+              {isAdding && activeTab === 'pannelli' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <input type="text" value={panelForm.codice} onChange={e=>setPanelForm({...panelForm, codice: e.target.value.toUpperCase()})} placeholder="Codice..." className="p-3 border rounded-xl font-black" />
+                      <input type="text" value={panelForm.materiale} onChange={e=>setPanelForm({...panelForm, materiale: e.target.value})} placeholder="Materiale..." className="p-3 border rounded-xl font-bold" />
+                      <input type="number" value={panelForm.lungDefault} onChange={e=>setPanelForm({...panelForm, lungDefault: parseInt(e.target.value)})} placeholder="Base (mm)" className="p-3 border rounded-xl font-black" />
+                      <input type="number" value={panelForm.altDefault} onChange={e=>setPanelForm({...panelForm, altDefault: parseInt(e.target.value)})} placeholder="Altezza (mm)" className="p-3 border rounded-xl font-black" />
+                   </div>
+                   <div className="flex gap-4">
+                      <button onClick={handleSavePanel} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg">Salva Pannello</button>
+                      <button onClick={()=>setIsAdding(false)} className="px-10 bg-white border rounded-xl font-black uppercase">Annulla</button>
+                   </div>
+                </div>
+              )}
+
+              {/* Form Aggiunta Colori */}
+              {isAdding && activeTab === 'colori' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 flex flex-col md:flex-row gap-4">
+                   <input type="text" value={colorForm.nome} onChange={e=>setColorForm({...colorForm, nome: e.target.value})} placeholder="Nome Colore..." className="flex-1 p-3 border rounded-xl font-bold uppercase" />
+                   <div className="flex gap-2">
+                      <button onClick={handleSaveColor} className="bg-slate-900 text-white px-10 py-3.5 rounded-xl font-black uppercase shadow-lg flex items-center gap-2"><Save className="w-5 h-5"/> Salva Colore</button>
+                      <button onClick={()=>setIsAdding(false)} className="bg-white border p-3 rounded-xl"><X className="w-5 h-5"/></button>
+                   </div>
+                </div>
+              )}
+
+              {/* Form Aggiunta Clienti */}
+              {isAdding && activeTab === 'clienti' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input type="text" value={clientForm.nome} onChange={e=>setClientForm({...clientForm, nome: e.target.value})} placeholder="Nome Cliente..." className="p-3 border rounded-xl font-black uppercase" />
+                      <input type="text" value={clientForm.note || ''} onChange={e=>setClientForm({...clientForm, note: e.target.value})} placeholder="Note / Indirizzo..." className="p-3 border rounded-xl font-bold" />
+                   </div>
+                   <div className="flex gap-4">
+                      <button onClick={handleSaveClient} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg flex items-center justify-center gap-2"><Save className="w-5 h-5"/> Salva Cliente</button>
+                      <button onClick={()=>setIsAdding(false)} className="px-10 bg-white border rounded-xl font-black uppercase">Annulla</button>
+                   </div>
+                </div>
+              )}
 
               <div className="border rounded-[2rem] bg-white shadow-sm overflow-hidden">
                 <table className="w-full text-left">
@@ -364,6 +404,38 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                          </tr>
                       ))}
 
+                      {activeTab === 'pannelli' && panelMaterials.filter(p=>p.codice.includes(searchTerm.toUpperCase())).map(p => (
+                         <tr key={p.id} className="hover:bg-slate-50 transition-all font-bold">
+                            <td className="px-6 py-5 uppercase font-black">{p.codice} <div className="text-[10px] text-slate-400 font-normal">{p.materiale}</div></td>
+                            <td className="px-6 py-5 text-red-600 font-black">{p.lungDefault}x{p.altDefault} mm</td>
+                            <td className="px-6 py-5 text-center flex justify-center gap-2">
+                               <button onClick={()=>{setPanelForm(p); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
+                               <button onClick={()=>deleteItem('pannelli', p.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                            </td>
+                         </tr>
+                      ))}
+
+                      {activeTab === 'colori' && colors.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
+                           <td className="px-6 py-5 uppercase font-black">{c.nome}</td>
+                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase font-bold italic tracking-tighter">Colore RAL/Standard</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={()=>deleteItem('colori', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                           </td>
+                        </tr>
+                      ))}
+
+                      {activeTab === 'clienti' && clients.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
+                           <td className="px-6 py-5 uppercase font-black">{c.nome} <div className="text-[10px] text-slate-400 font-normal">{c.note}</div></td>
+                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase font-bold tracking-tighter">Aggiunto il: {new Date(c.dataAggiunta).toLocaleDateString()}</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={()=>{setClientForm(c); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
+                              <button onClick={()=>deleteItem('clienti', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                           </td>
+                        </tr>
+                      ))}
+
                       {activeTab === 'commesse' && filteredCommesse.map(c => (
                         <tr key={c.id} className={`hover:bg-slate-50 font-bold transition-all ${selectedCommessaIds.includes(c.id) ? 'bg-red-50/30' : ''}`}>
                            <td className="px-6 py-5">
@@ -380,21 +452,21 @@ CREATE TABLE IF NOT EXISTS commesse (id TEXT PRIMARY KEY, numero TEXT, cliente T
                         </tr>
                       ))}
 
-                      {/* Fallback per tab vuoti */}
-                      {filteredCommesse.length === 0 && activeTab === 'commesse' && (
+                      {activeTab === 'commesse' && filteredCommesse.length === 0 && (
                          <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessuna commessa trovata per l'anno {selectedYear}.</td></tr>
                       )}
-                      {activeTab === 'pannelli' && panelMaterials.filter(p=>p.codice.includes(searchTerm.toUpperCase())).map(p => (
-                         <tr key={p.id} className="hover:bg-slate-50 transition-all font-bold">
-                            <td className="px-6 py-5 uppercase font-black">{p.codice} <div className="text-[10px] text-slate-400 font-normal">{p.materiale}</div></td>
-                            <td className="px-6 py-5 text-red-600 font-black">{p.lungDefault}x{p.altDefault} mm</td>
-                            <td className="px-6 py-5 text-center flex justify-center gap-2">
-                               <button onClick={()=>{setPanelForm(p); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
-                               <button onClick={()=>deleteItem('pannelli', p.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
-                            </td>
-                         </tr>
-                      ))}
-                      {/* Gestione clienti e colori analoga a profili... */}
+                      {activeTab === 'profili' && profiles.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun profilo in archivio.</td></tr>
+                      )}
+                      {activeTab === 'pannelli' && panelMaterials.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun materiale pannello in archivio.</td></tr>
+                      )}
+                      {activeTab === 'colori' && colors.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun colore salvato.</td></tr>
+                      )}
+                      {activeTab === 'clienti' && clients.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun cliente salvato.</td></tr>
+                      )}
                    </tbody>
                 </table>
               </div>
