@@ -44,7 +44,7 @@ export const exportService = {
     doc.save(`ALEA_Barre_${commessa || 'Export'}.pdf`);
   },
 
-  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number, colore: string) => {
+  panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number) => {
     const { jsPDF } = (window as any).jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const margin = 15;
@@ -52,6 +52,7 @@ export const exportService = {
     let first = true;
 
     Object.values(results).forEach(group => {
+      const groupColor = group.colore || 'N/D';
       group.sheets.forEach((sheet, sIdx) => {
         if (!first) doc.addPage(); first = false;
         doc.setFontSize(26); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
@@ -60,7 +61,7 @@ export const exportService = {
         doc.setFontSize(12); doc.setTextColor(100);
         doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 35);
         doc.setTextColor(15, 23, 42); doc.setFontSize(13);
-        doc.text(`Materiale: ${group.material} | Colore: ${colore || 'N/D'}`, margin, 44);
+        doc.text(`Materiale: ${group.material} | Colore: ${groupColor}`, margin, 44);
         doc.setFontSize(11); doc.text(`Lastra Grezza: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 50);
 
         const scale = Math.min((pageWidth - 2 * margin) / sheetW, 140 / sheetH);

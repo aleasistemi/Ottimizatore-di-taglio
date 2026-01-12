@@ -89,6 +89,7 @@ export const optimizerService = {
     for (const key in groupedRequests) {
       const group = groupedRequests[key];
       const material = group[0].materiale;
+      const colore = group[0].colore;
       
       let panelsToPlace: any[] = [];
       group.forEach(r => {
@@ -188,7 +189,7 @@ export const optimizerService = {
         });
       }
 
-      results[key] = { material, sheets };
+      results[key] = { material, colore, sheets };
     }
 
     return results;

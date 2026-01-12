@@ -222,7 +222,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
           <div className="space-y-10 animate-in slide-in-from-bottom-5 duration-700">
              <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-8 rounded-[2rem] border shadow-lg gap-4">
                 <h3 className="font-black text-2xl uppercase tracking-tighter flex items-center gap-3"><Boxes className="w-7 h-7 text-red-600" /> Soluzioni Generate</h3>
-                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra), coloreLastra)} className="bg-red-600 text-white px-10 py-4 rounded-2xl font-black flex gap-2 shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-xs"><Download /> Scarica PDF</button>
+                <button onClick={()=>exportService.panelToPdf(results, cliente, commessa, parseFloat(larghezzaLastra), parseFloat(altezzaLastra))} className="bg-red-600 text-white px-10 py-4 rounded-2xl font-black flex gap-2 shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-xs"><Download /> Scarica PDF</button>
              </div>
              
              {(Object.entries(results) as [string, any][]).map(([key, group]) => (
@@ -230,7 +230,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                    <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl border-l-[12px] border-red-600">
                       <div className="space-y-1">
                         <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{group.material}</h4>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">{key.split('___')[1]}</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">{group.colore}</p>
                       </div>
                       <div className="text-right">
                         <div className="text-5xl font-black text-white leading-none">{group.sheets.length}</div>
