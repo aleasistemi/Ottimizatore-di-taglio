@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users, FileSpreadsheet, Upload } from 'lucide-react';
 import { Profile, Client, CommessaArchiviata, PanelMaterial, AleaColor } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 
 type DbTab = 'profili' | 'pannelli' | 'colori' | 'clienti' | 'commesse' | 'settings';
 
@@ -16,6 +17,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const [activeTab, setActiveTab] = useState<DbTab>(forcedTab || 'profili');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [panelMaterials, setPanelMaterials] = useState<PanelMaterial[]>([]);
@@ -61,6 +63,48 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     const updated = [profileForm, ...profiles.filter(p => p.codice !== profileForm.codice)];
     await saveToDb('profili', updated);
     setIsAdding(false); setProfileForm({ codice: '', descr: '', lungMax: 6000 });
+  };
+
+  const handleImportXlsx = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        const importedProfiles: Profile[] = data
+          .filter(row => row[0]) // Filtra righe vuote
+          .map(row => ({
+            codice: String(row[0]).toUpperCase().trim(),
+            descr: String(row[1] || '').trim(),
+            lungMax: row[2] ? parseInt(row[2]) : 6000
+          }));
+
+        if (importedProfiles.length === 0) {
+          alert("Nessun profilo trovato nel file.");
+          return;
+        }
+
+        // Unione con profili esistenti (il nuovo sovrascrive il vecchio se stesso codice)
+        const existingMap = new Map(profiles.map(p => [p.codice, p]));
+        importedProfiles.forEach(p => existingMap.set(p.codice, p));
+        
+        const finalData = Array.from(existingMap.values());
+        await saveToDb('profili', finalData);
+        alert(`Importati correttamente ${importedProfiles.length} profili!`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err) {
+        console.error(err);
+        alert("Errore durante l'importazione del file Excel. Verifica il formato.");
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   const handleSavePanel = async () => {
@@ -191,12 +235,24 @@ CREATE TABLE IF NOT EXISTS commesse (
            </div>
         ) : (
            <div className="space-y-6">
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                  <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input type="text" placeholder="Cerca nel database..." className="w-full p-4 pl-12 border rounded-2xl outline-none" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                  </div>
-                 <button onClick={()=>setIsAdding(true)} className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase shadow-lg hover:bg-red-700 transition-all flex items-center gap-2"><Plus className="w-5 h-5" /> Aggiungi</button>
+                 <div className="flex gap-2">
+                    {activeTab === 'profili' && (
+                      <>
+                        <input type="file" accept=".xlsx, .xls" ref={fileInputRef} onChange={handleImportXlsx} className="hidden" />
+                        <button onClick={() => fileInputRef.current?.click()} className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-4 rounded-2xl font-black uppercase shadow-sm hover:border-slate-800 transition-all flex items-center gap-2 text-xs">
+                          <FileSpreadsheet className="w-4 h-4 text-green-600" /> <span className="hidden lg:inline">Importa XLSX</span>
+                        </button>
+                      </>
+                    )}
+                    <button onClick={()=>setIsAdding(true)} className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase shadow-lg hover:bg-red-700 transition-all flex items-center gap-2 whitespace-nowrap text-xs">
+                      <Plus className="w-5 h-5" /> Aggiungi
+                    </button>
+                 </div>
               </div>
 
               {isAdding && activeTab === 'profili' && (
