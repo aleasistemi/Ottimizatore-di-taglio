@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Play, Download, Trash2, FileText, Settings, Boxes, ChevronRight, Hash, Ruler, Warehouse, CheckCircle2, Save, FileSpreadsheet, RotateCcw, Search, ChevronDown } from 'lucide-react';
 import { CutRequest, OptimizationResult, OptimizedBar, GroupedBarResult, CommessaArchiviata, Client, Profile } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
@@ -9,6 +9,100 @@ import { supabaseService } from '../services/supabaseService';
 interface BarOptimizerProps {
   externalData?: CommessaArchiviata | null;
 }
+
+// Semplice componente interno per la selezione con ricerca
+const SearchableSelect = ({ 
+  label, 
+  value, 
+  options, 
+  onChange, 
+  placeholder,
+  displayKey,
+  valueKey 
+}: { 
+  label: string, 
+  value: string, 
+  options: any[], 
+  onChange: (val: string) => void, 
+  placeholder: string,
+  displayKey: string,
+  valueKey: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt => 
+    opt[displayKey].toLowerCase().includes(search.toLowerCase()) ||
+    (opt.descr && opt.descr.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const selectedOption = options.find(opt => opt[valueKey] === value);
+
+  return (
+    <div className="space-y-1 relative" ref={containerRef}>
+      <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-red-500 outline-none flex items-center justify-between cursor-pointer group"
+      >
+        <span className={`font-bold truncate ${!selectedOption ? 'text-slate-400' : 'text-slate-900 uppercase'}`}>
+          {selectedOption ? selectedOption[displayKey] : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-3 border-b bg-slate-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Digita per cercare..." 
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-red-500"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => {
+                    onChange(opt[valueKey]);
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                >
+                  <div className="text-xs font-black text-slate-900 uppercase">{opt[displayKey]}</div>
+                  {opt.descr && <div className="text-[10px] text-slate-400 font-bold truncate uppercase">{opt.descr}</div>}
+                </div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-400 font-bold italic">Nessun risultato trovato</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const [cliente, setCliente] = useState('');
@@ -32,10 +126,19 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const loadData = () => {
-    const profiles = localStorage.getItem('alea_profiles');
-    if (profiles) setAvailableProfiles(JSON.parse(profiles));
-    const clients = localStorage.getItem('alea_clients');
-    if (clients) setAvailableClients(JSON.parse(clients));
+    const profilesRaw = localStorage.getItem('alea_profiles');
+    if (profilesRaw) {
+      const parsed = JSON.parse(profilesRaw) as Profile[];
+      // Ordinamento Alfabetico per Codice
+      setAvailableProfiles(parsed.sort((a, b) => a.codice.localeCompare(b.codice)));
+    }
+    
+    const clientsRaw = localStorage.getItem('alea_clients');
+    if (clientsRaw) {
+      const parsed = JSON.parse(clientsRaw) as Client[];
+      // Ordinamento Alfabetico per Nome
+      setAvailableClients(parsed.sort((a, b) => a.nome.localeCompare(b.nome)));
+    }
   };
 
   useEffect(() => {
@@ -92,7 +195,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
     
-    // Gestione Commessa
     const commesseJson = localStorage.getItem('alea_commesse') || '[]';
     const commesse = JSON.parse(commesseJson);
     const nuovaCommessa: CommessaArchiviata = {
@@ -162,13 +264,15 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
               <span>Dettagli Commessa</span>
             </h3>
             <div className="space-y-5">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Cliente</label>
-                <select value={cliente} onChange={e => setCliente(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none font-bold uppercase">
-                  <option value="">Seleziona Cliente...</option>
-                  {availableClients.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-                </select>
-              </div>
+              <SearchableSelect 
+                label="Cliente"
+                value={cliente}
+                options={availableClients}
+                onChange={setCliente}
+                placeholder="Cerca cliente..."
+                displayKey="nome"
+                valueKey="nome"
+              />
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Commessa / Rif.</label>
                 <input type="text" value={commessa} onChange={e => setCommessa(e.target.value)} placeholder="ID commessa..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all font-medium" />
@@ -182,13 +286,15 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
               <span>Aggiunta Taglio</span>
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Profilo</label>
-                <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500 font-bold">
-                  <option value="">Seleziona...</option>
-                  {availableProfiles.map(p => <option key={p.codice} value={p.codice}>{p.codice} - {p.descr}</option>)}
-                </select>
-              </div>
+              <SearchableSelect 
+                label="Profilo"
+                value={selectedProfile}
+                options={availableProfiles}
+                onChange={setSelectedProfile}
+                placeholder="Cerca profilo..."
+                displayKey="codice"
+                valueKey="codice"
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Barra (mm)</label>

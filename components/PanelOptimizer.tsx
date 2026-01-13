@@ -1,16 +1,112 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler } from 'lucide-react';
+import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler, Search, ChevronDown } from 'lucide-react';
 import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client, AleaColor } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
 
+// Riutilizziamo la stessa logica del componente SearchableSelect per coerenza UI
+const SearchableSelect = ({ 
+  label, 
+  value, 
+  options, 
+  onChange, 
+  placeholder,
+  displayKey,
+  valueKey,
+  secondaryKey
+}: { 
+  label: string, 
+  value: string, 
+  options: any[], 
+  onChange: (val: string) => void, 
+  placeholder: string,
+  displayKey: string,
+  valueKey: string,
+  secondaryKey?: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt => 
+    opt[displayKey].toLowerCase().includes(search.toLowerCase()) ||
+    (secondaryKey && opt[secondaryKey] && opt[secondaryKey].toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const selectedOption = options.find(opt => opt[valueKey] === value);
+
+  return (
+    <div className="space-y-1 relative" ref={containerRef}>
+      <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-red-500 outline-none flex items-center justify-between cursor-pointer group"
+      >
+        <span className={`font-bold truncate ${!selectedOption ? 'text-slate-400' : 'text-slate-900 uppercase'}`}>
+          {selectedOption ? selectedOption[displayKey] : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-3 border-b bg-slate-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Digita per cercare..." 
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-red-500"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => {
+                    onChange(opt[valueKey]);
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                >
+                  <div className="text-xs font-black text-slate-900 uppercase">{opt[displayKey]}</div>
+                  {secondaryKey && opt[secondaryKey] && <div className="text-[10px] text-slate-400 font-bold truncate uppercase">{opt[secondaryKey]}</div>}
+                </div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-400 font-bold italic">Nessun risultato trovato</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null }> = ({ externalData }) => {
   const [cliente, setCliente] = useState('');
   const [commessa, setCommessa] = useState('');
   const [selectedPanelId, setSelectedPanelId] = useState('');
-  const [materiale, setMateriale] = useState('Lexan 3mm');
+  const [materiale, setMateriale] = useState('');
   const [coloreLastra, setColoreLastra] = useState('Trasparente');
   const [larghezzaLastra, setLarghezzaLastra] = useState('3050');
   const [altezzaLastra, setAltezzaLastra] = useState('2050');
@@ -28,9 +124,18 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
   const loadData = () => {
-    setAvailablePanels(JSON.parse(localStorage.getItem('alea_panel_materials') || '[]'));
-    setAvailableClients(JSON.parse(localStorage.getItem('alea_clients') || '[]'));
-    setAvailableColors(JSON.parse(localStorage.getItem('alea_colors') || '[]'));
+    // Caricamento e ordinamento alfabetico
+    const pRaw = localStorage.getItem('alea_panel_materials') || '[]';
+    const cRaw = localStorage.getItem('alea_clients') || '[]';
+    const clRaw = localStorage.getItem('alea_colors') || '[]';
+
+    const pParsed = JSON.parse(pRaw) as PanelMaterial[];
+    const cParsed = JSON.parse(cRaw) as Client[];
+    const clParsed = JSON.parse(clRaw) as AleaColor[];
+
+    setAvailablePanels(pParsed.sort((a, b) => a.codice.localeCompare(b.codice)));
+    setAvailableClients(cParsed.sort((a, b) => a.nome.localeCompare(b.nome)));
+    setAvailableColors(clParsed.sort((a, b) => a.nome.localeCompare(b.nome)));
   };
 
   useEffect(() => {
@@ -47,13 +152,22 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const handleSelectPanel = (id: string) => {
     const p = availablePanels.find(ap => ap.id === id);
     if (p) {
-      setSelectedPanelId(id); setMateriale(p.materiale);
-      setLarghezzaLastra(p.lungDefault.toString()); setAltezzaLastra(p.altDefault.toString());
+      setSelectedPanelId(id); 
+      setMateriale(p.materiale);
+      setLarghezzaLastra(p.lungDefault.toString()); 
+      setAltezzaLastra(p.altDefault.toString());
+      setRotazione(p.giraPezzoDefault);
+    } else {
+      setSelectedPanelId('');
+      setMateriale('');
     }
   };
 
   const handleAddCut = () => {
-    if (!lunghezza || !altezza) return;
+    if (!lunghezza || !altezza || !materiale) {
+      alert("Specifica materiale e misure!");
+      return;
+    }
     const newCut: PanelCutRequest = {
       id: Math.random().toString(36).substr(2, 9),
       materiale,
@@ -126,26 +240,37 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 pb-10">
       <div className="space-y-6">
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest"><FileText className="w-4 h-4" /> Dettagli Commessa</h3>
+           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><FileText className="w-5 h-5 text-red-600" /> Dettagli Commessa</h3>
+           
+           <SearchableSelect 
+              label="Cliente"
+              value={cliente}
+              options={availableClients}
+              onChange={setCliente}
+              placeholder="Cerca cliente..."
+              displayKey="nome"
+              valueKey="nome"
+           />
+
            <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Cliente</label>
-             <select value={cliente} onChange={e=>setCliente(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500">
-                <option value="">Seleziona Cliente...</option>
-                {availableClients.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-             </select>
+             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Commessa / Rif.</label>
+             <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} placeholder="Commessa..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
            </div>
-           <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} placeholder="Commessa..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
         </section>
 
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest"><Square className="w-4 h-4" /> Lastra Officina</h3>
-           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Seleziona Pannello Archivio</label>
-             <select value={selectedPanelId} onChange={e=>handleSelectPanel(e.target.value)} className="w-full p-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase outline-none shadow-lg">
-                <option value="">-- Configura Libera --</option>
-                {availablePanels.map(p => <option key={p.id} value={p.id}>{p.codice} - {p.materiale}</option>)}
-             </select>
-           </div>
+           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Square className="w-5 h-5 text-red-600" /> Lastra Officina</h3>
+           
+           <SearchableSelect 
+              label="Seleziona Pannello Archivio"
+              value={selectedPanelId}
+              options={availablePanels}
+              onChange={handleSelectPanel}
+              placeholder="-- Configura Libera --"
+              displayKey="codice"
+              valueKey="id"
+              secondaryKey="materiale"
+           />
            
            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -160,19 +285,29 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
            
            <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Colore Pannello</label>
-             <select value={coloreLastra} onChange={e=>setColoreLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500">
-                <option value="">Scegli Colore...</option>
+             <select value={coloreLastra} onChange={e=>setColoreLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500 bg-slate-50">
                 <option value="Trasparente">Trasparente</option>
                 {availableColors.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
              </select>
            </div>
+
+           <div className="space-y-1">
+             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Nome Materiale (per distinta)</label>
+             <input type="text" value={materiale} onChange={e=>setMateriale(e.target.value)} placeholder="Es: Lexan 3mm..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none" />
+           </div>
         </section>
 
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest"><Plus className="w-4 h-4" /> Pezzo Finito</h3>
+           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Plus className="w-5 h-5 text-red-600" /> Pezzo Finito</h3>
            <div className="grid grid-cols-2 gap-4">
-              <input type="text" value={lunghezza} onChange={e=>setLunghezza(e.target.value)} placeholder="Base mm" className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-red-600 focus:ring-2 focus:ring-red-600 outline-none" />
-              <input type="text" value={altezza} onChange={e=>setAltezza(e.target.value)} placeholder="Altezza mm" className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-red-600 focus:ring-2 focus:ring-red-600 outline-none" />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Base mm</label>
+                <input type="text" value={lunghezza} onChange={e=>setLunghezza(e.target.value)} placeholder="0.0" className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-red-600 focus:ring-2 focus:ring-red-600 outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Altezza mm</label>
+                <input type="text" value={altezza} onChange={e=>setAltezza(e.target.value)} placeholder="0.0" className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-red-600 focus:ring-2 focus:ring-red-600 outline-none" />
+              </div>
            </div>
            <div className="flex items-center justify-between px-2 pt-2">
               <label className="flex items-center gap-3 text-[11px] font-black uppercase text-slate-500 cursor-pointer">
@@ -184,7 +319,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                 <input type="number" value={quantita} onChange={e=>setQuantita(parseInt(e.target.value)||1)} className="w-20 p-3 border rounded-xl text-center font-black focus:ring-2 focus:ring-red-500" />
               </div>
            </div>
-           <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-sm">Aggiungi in Distinta</button>
+           <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-sm mt-2">Aggiungi in Distinta</button>
         </section>
       </div>
 
@@ -212,10 +347,15 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                        <td className="p-5 text-center"><button onClick={()=>setDistinta(prev=>prev.filter(x=>x.id!==c.id))} className="p-2 text-slate-300 hover:text-red-600 transition-all"><Trash2 className="w-5 h-5"/></button></td>
                     </tr>
                   ))}
+                  {distinta.length === 0 && (
+                    <tr><td colSpan={4} className="p-20 text-center text-slate-300 italic font-bold">Nessun pezzo in distinta.</td></tr>
+                  )}
                 </tbody>
              </table>
           </div>
-          <div className="p-6 bg-slate-50 border-t"><button onClick={runOptimization} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase shadow-2xl hover:bg-slate-800 transition-all tracking-[0.2em] text-sm">Avvia Ottimizzazione Nesting</button></div>
+          <div className="p-6 bg-slate-50 border-t"><button onClick={runOptimization} disabled={distinta.length === 0 || isOptimizing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase shadow-2xl hover:bg-slate-800 transition-all tracking-[0.2em] text-sm">
+            {isOptimizing ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto"></div> : "Avvia Ottimizzazione Nesting"}
+          </button></div>
         </section>
 
         {results && (
