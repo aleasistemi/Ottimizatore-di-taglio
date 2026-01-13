@@ -106,6 +106,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const [cliente, setCliente] = useState('');
   const [commessa, setCommessa] = useState('');
   const [selectedPanelId, setSelectedPanelId] = useState('');
+  const [codicePannello, setCodicePannello] = useState('');
   const [materiale, setMateriale] = useState('');
   const [coloreLastra, setColoreLastra] = useState('Trasparente');
   const [larghezzaLastra, setLarghezzaLastra] = useState('3050');
@@ -153,12 +154,14 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     const p = availablePanels.find(ap => ap.id === id);
     if (p) {
       setSelectedPanelId(id); 
+      setCodicePannello(p.codice);
       setMateriale(p.materiale);
       setLarghezzaLastra(p.lungDefault.toString()); 
       setAltezzaLastra(p.altDefault.toString());
       setRotazione(p.giraPezzoDefault);
     } else {
       setSelectedPanelId('');
+      setCodicePannello('');
       setMateriale('');
     }
   };
@@ -170,6 +173,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     }
     const newCut: PanelCutRequest = {
       id: Math.random().toString(36).substr(2, 9),
+      codice: codicePannello,
       materiale,
       colore: coloreLastra || 'Standard',
       lunghezza: parseFloat(lunghezza.replace(',', '.')),
@@ -340,7 +344,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                     <tr key={c.id} className="font-bold hover:bg-slate-50 transition-all">
                        <td className="p-5">
                           <div className="text-slate-900 uppercase font-black">{c.materiale}</div>
-                          <div className="text-[10px] text-red-600 font-black uppercase tracking-widest mt-0.5">{c.colore}</div>
+                          <div className="text-[10px] text-red-600 font-black uppercase tracking-widest mt-0.5">{c.colore} {c.codice ? `(${c.codice})` : ''}</div>
                        </td>
                        <td className="p-5 text-slate-900 font-black text-sm">{c.lunghezza} x {c.altezza}</td>
                        <td className="p-5 text-center bg-slate-50/50"><span className="text-red-600 font-black text-sm">{c.quantita}</span> pz</td>
@@ -369,8 +373,9 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                 <div key={key} className="space-y-6">
                    <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl border-l-[12px] border-red-600">
                       <div className="space-y-1">
-                        <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{group.material}</h4>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">{group.colore}</p>
+                        <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{group.codice || 'LIBERO'}</h4>
+                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest">{group.material}</p>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{group.colore}</p>
                       </div>
                       <div className="text-right">
                         <div className="text-5xl font-black text-white leading-none">{group.sheets.length}</div>
