@@ -3,10 +3,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Registrazione Service Worker per PWA
+// Registrazione Service Worker per PWA (percorso relativo per compatibilità)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => {
+    navigator.serviceWorker.register('sw.js').catch(err => {
       console.log('Service Worker registration failed: ', err);
     });
   });
