@@ -68,6 +68,7 @@ export interface OptimizationResult {
 
 export interface PanelCutRequest {
   id: string;
+  codice?: string;
   materiale: string;
   colore: string;
   lunghezza: number;
@@ -94,6 +95,7 @@ export interface OptimizedSheet {
 
 export interface PanelOptimizationResult {
   [key: string]: {
+    codice?: string;
     material: string;
     colore?: string;
     sheets: OptimizedSheet[];
