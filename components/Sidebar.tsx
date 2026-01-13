@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Scissors, Square, Settings, Database, Cloud, DownloadCloud } from 'lucide-react';
+import React from 'react';
+import { Scissors, Square, Settings, Database, Cloud } from 'lucide-react';
 import { OptimizerMode } from '../types';
 
 interface SidebarProps {
@@ -10,27 +10,6 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange, onOpenSettings }) => {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-    }
-  };
-
   const navItems = [
     { id: OptimizerMode.BARRE, icon: Scissors, label: 'Taglio Barre', desc: 'ALEA SISTEMI' },
     { id: OptimizerMode.PANNELLI, icon: Square, label: 'Taglio Pannelli', desc: 'ALEA SISTEMI' },
@@ -88,20 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeMode, onModeChange, onOp
         </nav>
       </div>
 
-      <div className="mt-auto p-6 space-y-4">
-        {deferredPrompt && (
-          <button 
-            onClick={handleInstallClick}
-            className="w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 p-4 rounded-2xl flex items-center gap-3 transition-all animate-bounce"
-          >
-            <DownloadCloud className="w-5 h-5 text-blue-400" />
-            <div className="text-left">
-              <div className="text-[10px] font-black uppercase">Installa App</div>
-              <div className="text-[8px] font-bold text-slate-500 uppercase">Versione Desktop</div>
-            </div>
-          </button>
-        )}
-
+      <div className="mt-auto p-6">
         <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
           <div className="flex items-center space-x-2 text-[9px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">
             <Cloud className="w-3.5 h-3.5" />

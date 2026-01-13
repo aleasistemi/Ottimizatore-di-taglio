@@ -95,7 +95,6 @@ export interface OptimizedSheet {
 export interface PanelOptimizationResult {
   [key: string]: {
     material: string;
-    colore?: string;
     sheets: OptimizedSheet[];
   };
 }

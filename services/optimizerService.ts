@@ -6,6 +6,7 @@ export const optimizerService = {
   optimizeBars: (requests: CutRequest[]): OptimizationResult => {
     const results: OptimizationResult = {};
 
+    // Group by profile code
     const grouped: Record<string, any[]> = {};
     requests.forEach(req => {
       if (!grouped[req.codice]) grouped[req.codice] = [];
@@ -26,6 +27,7 @@ export const optimizerService = {
       const profileInfo = PROFILI[codice];
       const maxLen = pieces[0]?.lungBarra || (profileInfo ? profileInfo.lungMax : null) || 6000;
 
+      // First-Fit Decreasing Algorithm
       pieces.sort((a, b) => b.lung - a.lung);
 
       const optimizedBarList: OptimizedBar[] = [];
@@ -81,16 +83,12 @@ export const optimizerService = {
 
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
-      const key = `${r.materiale}___${r.colore}`;
-      if (!groupedRequests[key]) groupedRequests[key] = [];
-      groupedRequests[key].push(r);
+      if (!groupedRequests[r.materiale]) groupedRequests[r.materiale] = [];
+      groupedRequests[r.materiale].push(r);
     });
 
-    for (const key in groupedRequests) {
-      const group = groupedRequests[key];
-      const material = group[0].materiale;
-      const colore = group[0].colore;
-      
+    for (const material in groupedRequests) {
+      const group = groupedRequests[material];
       let panelsToPlace: any[] = [];
       group.forEach(r => {
         for (let i = 0; i < r.quantita; i++) {
@@ -98,6 +96,7 @@ export const optimizerService = {
         }
       });
 
+      // Simple Shelf Packing Algorithm
       panelsToPlace.sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
 
       const sheets: OptimizedSheet[] = [];
@@ -189,7 +188,7 @@ export const optimizerService = {
         });
       }
 
-      results[key] = { material, colore, sheets };
+      results[material] = { material, sheets };
     }
 
     return results;
