@@ -106,9 +106,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     const updatedCommesse = [nuovaCommessa, ...commesse];
     localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
     
-    // Dispatch local update
-    window.dispatchEvent(new CustomEvent('alea_local_mutation'));
-
     if (supabaseService.isInitialized()) {
         try {
             await supabaseService.syncTable('commesse', updatedCommesse);
@@ -167,7 +164,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
             <div className="space-y-5">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Cliente</label>
-                <select value={cliente} onChange={e => setCliente(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none font-bold uppercase text-sm">
+                <select value={cliente} onChange={e => setCliente(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none font-bold uppercase">
                   <option value="">Seleziona Cliente...</option>
                   {availableClients.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
                 </select>
@@ -187,7 +184,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Profilo</label>
-                <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500 font-bold text-sm">
+                <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500 font-bold">
                   <option value="">Seleziona...</option>
                   {availableProfiles.map(p => <option key={p.codice} value={p.codice}>{p.codice} - {p.descr}</option>)}
                 </select>
