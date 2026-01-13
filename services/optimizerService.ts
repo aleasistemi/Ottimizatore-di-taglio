@@ -81,7 +81,7 @@ export const optimizerService = {
 
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
-      const key = `${r.materiale}___${r.colore}`;
+      const key = `${r.codice || 'LIBERO'}___${r.materiale}___${r.colore}`;
       if (!groupedRequests[key]) groupedRequests[key] = [];
       groupedRequests[key].push(r);
     });
@@ -90,6 +90,7 @@ export const optimizerService = {
       const group = groupedRequests[key];
       const material = group[0].materiale;
       const colore = group[0].colore;
+      const codice = group[0].codice;
       
       let panelsToPlace: any[] = [];
       group.forEach(r => {
@@ -189,7 +190,7 @@ export const optimizerService = {
         });
       }
 
-      results[key] = { material, colore, sheets };
+      results[key] = { codice, material, colore, sheets };
     }
 
     return results;

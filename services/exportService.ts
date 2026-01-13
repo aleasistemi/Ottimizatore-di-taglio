@@ -53,6 +53,7 @@ export const exportService = {
 
     Object.values(results).forEach(group => {
       const groupColor = group.colore || 'N/D';
+      const groupCode = group.codice || 'LIBERO';
       group.sheets.forEach((sheet, sIdx) => {
         if (!first) doc.addPage(); first = false;
         doc.setFontSize(26); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
@@ -61,7 +62,7 @@ export const exportService = {
         doc.setFontSize(12); doc.setTextColor(100);
         doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 35);
         doc.setTextColor(15, 23, 42); doc.setFontSize(13);
-        doc.text(`Materiale: ${group.material} | Colore: ${groupColor}`, margin, 44);
+        doc.text(`Codice: ${groupCode} | Materiale: ${group.material} | Colore: ${groupColor}`, margin, 44);
         doc.setFontSize(11); doc.text(`Lastra Grezza: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 50);
 
         const scale = Math.min((pageWidth - 2 * margin) / sheetW, 140 / sheetH);
