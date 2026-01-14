@@ -18,6 +18,7 @@ export const exportService = {
     const margin = 15;
     const pageWidth = 210;
     
+    // Intestazione ALEA
     doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
     doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("DISTINTA TECNICA DI TAGLIO", margin, 25);
     doc.setDrawColor(226, 232, 240); doc.line(margin, 28, pageWidth - margin, 28);
@@ -38,7 +39,10 @@ export const exportService = {
       doc.setDrawColor(200); doc.line(margin, y, pageWidth - margin, y);
       y += 6;
       
-      const barreToPrint = getGroupedBars(data.barre);
+      // Rispetta la scelta dell'utente: raggruppa se richiesto, altrimenti mostra barre singole
+      const barreToPrint = groupBars 
+        ? getGroupedBars(data.barre) 
+        : data.barre.map(b => ({ ...b, count: 1 }));
       
       barreToPrint.forEach((bar) => {
         if (y > 275) { doc.addPage(); y = 20; }
@@ -52,16 +56,12 @@ export const exportService = {
         const rowPrefix = `${bar.count}x  |  `;
         const rowSuffix = `  |  Sfrido: ${bar.residuo}mm`;
         
-        // Calcolo larghezze per evitare sovrapposizioni
-        // Margine sx 15. Prefisso ~12mm. Suffix ~45mm. Margine dx 15.
-        // Spazio per i pezzi limitato per non toccare lo sfrido a destra
+        // Calcolo larghezze per evitare sovrapposizioni (come da correzione screenshot)
         const availableWidthForPezzi = 120; 
         const lines = doc.splitTextToSize(pezziList, availableWidthForPezzi);
         
-        // Stampa Prefisso
         doc.text(rowPrefix, margin, y);
         
-        // Stampa Pezzi (con gestione multi-riga se necessario)
         doc.setFont("helvetica", "normal");
         lines.forEach((line: string, index: number) => {
           if (index > 0) {
@@ -71,7 +71,6 @@ export const exportService = {
           doc.text(line, margin + 15, y);
         });
         
-        // Stampa Sfrido allineato a destra, sulla riga finale dei pezzi
         doc.setFont("helvetica", "bold");
         doc.text(rowSuffix, pageWidth - margin, y, { align: 'right' });
         
