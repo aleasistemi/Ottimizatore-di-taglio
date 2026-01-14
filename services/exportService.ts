@@ -4,7 +4,6 @@ import { OptimizationResult, PanelOptimizationResult, OptimizedBar, GroupedBarRe
 const getGroupedBars = (barre: OptimizedBar[]): GroupedBarResult[] => {
   const groups: Record<string, GroupedBarResult> = {};
   barre.forEach(bar => {
-    // Il fingerprint deve basarsi sulla sequenza esatta dei tagli per essere identica
     const fingerprint = bar.tagli.map(t => `${t.lung}-${t.angoli}`).join('|');
     if (groups[fingerprint]) groups[fingerprint].count++;
     else groups[fingerprint] = { ...bar, count: 1 };
@@ -19,7 +18,6 @@ export const exportService = {
     const margin = 15;
     const pageWidth = 210;
     
-    // Intestazione compatta ALEA
     doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
     doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("DISTINTA TECNICA DI TAGLIO", margin, 25);
     doc.setDrawColor(226, 232, 240); doc.line(margin, 28, pageWidth - margin, 28);
@@ -32,10 +30,7 @@ export const exportService = {
     for (const [code, data] of Object.entries(results)) {
       if (y > 270) { doc.addPage(); y = 20; }
       
-      // Calcolo totale barre per questo profilo
       const totalBars = data.barre.length;
-      
-      // Intestazione Profilo Compatta: Quantità Codice Descrizione
       doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
       const profileHeader = `${totalBars}x  ${code} - ${data.descrizione}`;
       doc.text(profileHeader, margin, y);
@@ -43,7 +38,6 @@ export const exportService = {
       doc.setDrawColor(200); doc.line(margin, y, pageWidth - margin, y);
       y += 6;
       
-      // Raggruppiamo sempre le barre identiche per il PDF per risparmiare spazio (anche se groupBars è false, in stampa è meglio raggruppare le righe)
       const barreToPrint = getGroupedBars(data.barre);
       
       barreToPrint.forEach((bar) => {
@@ -51,8 +45,6 @@ export const exportService = {
         
         doc.setFontSize(9); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
         
-        // Formattazione riga: 3x | Pezzo Pezzo Pezzo | Sfrido: 40mm
-        // Generiamo la lista di tutti i pezzi individuali senza raggrupparli (come richiesto per spuntarli a matita)
         const pezziList = bar.tagli.map(t => 
           `${t.lung}${t.angoli !== "90/90" ? `(${t.angoli})` : ""}`
         ).join("    ");
@@ -60,25 +52,32 @@ export const exportService = {
         const rowPrefix = `${bar.count}x  |  `;
         const rowSuffix = `  |  Sfrido: ${bar.residuo}mm`;
         
-        // Usiamo splitTextToSize per gestire righe molto lunghe di pezzi
-        const fullRowText = pezziList;
-        const availableWidth = pageWidth - margin * 2 - 40; // Spazio per prefisso e suffisso
-        const lines = doc.splitTextToSize(fullRowText, availableWidth);
+        // Calcolo larghezze per evitare sovrapposizioni
+        // Margine sx 15. Prefisso ~12mm. Suffix ~45mm. Margine dx 15.
+        // Spazio per i pezzi limitato per non toccare lo sfrido a destra
+        const availableWidthForPezzi = 120; 
+        const lines = doc.splitTextToSize(pezziList, availableWidthForPezzi);
         
+        // Stampa Prefisso
         doc.text(rowPrefix, margin, y);
         
+        // Stampa Pezzi (con gestione multi-riga se necessario)
         doc.setFont("helvetica", "normal");
         lines.forEach((line: string, index: number) => {
-          if (index > 0) y += 4;
+          if (index > 0) {
+            y += 4;
+            if (y > 285) { doc.addPage(); y = 20; }
+          }
           doc.text(line, margin + 15, y);
         });
         
+        // Stampa Sfrido allineato a destra, sulla riga finale dei pezzi
         doc.setFont("helvetica", "bold");
-        doc.text(rowSuffix, pageWidth - margin - 35, y, { align: 'right' });
+        doc.text(rowSuffix, pageWidth - margin, y, { align: 'right' });
         
         y += 7;
       });
-      y += 4; // Spazio tra profili diversi
+      y += 4;
     }
     
     doc.save(`ALEA_Taglio_${commessa || 'Barre'}.pdf`);
