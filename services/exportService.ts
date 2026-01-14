@@ -4,6 +4,7 @@ import { OptimizationResult, PanelOptimizationResult, OptimizedBar, GroupedBarRe
 const getGroupedBars = (barre: OptimizedBar[]): GroupedBarResult[] => {
   const groups: Record<string, GroupedBarResult> = {};
   barre.forEach(bar => {
+    // Il fingerprint deve basarsi sulla sequenza esatta dei tagli per essere identica
     const fingerprint = bar.tagli.map(t => `${t.lung}-${t.angoli}`).join('|');
     if (groups[fingerprint]) groups[fingerprint].count++;
     else groups[fingerprint] = { ...bar, count: 1 };
@@ -12,36 +13,75 @@ const getGroupedBars = (barre: OptimizedBar[]): GroupedBarResult[] => {
 };
 
 export const exportService = {
-  toPdf: (results: OptimizationResult, cliente: string, commessa: string, groupBars: boolean = false) => {
+  toPdf: (results: OptimizationResult, cliente: string, commessa: string, groupBars: boolean = true) => {
     const { jsPDF } = (window as any).jspdf;
     const doc = new jsPDF();
     const margin = 15;
-    doc.setFontSize(28); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 25);
-    doc.setFontSize(10); doc.setTextColor(220, 38, 38); doc.text("OTTIMIZZATORE PROFESSIONALE DI TAGLIO", margin, 31);
-    doc.setDrawColor(226, 232, 240); doc.line(margin, 38, 200, 38);
+    const pageWidth = 210;
     
-    doc.setFontSize(12); doc.setTextColor(100);
-    doc.text(`CLIENTE: ${cliente || 'N/D'}`, margin, 48);
-    doc.text(`COMMESSA: ${commessa || 'N/D'}`, margin, 54);
+    // Intestazione compatta ALEA
+    doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
+    doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("DISTINTA TECNICA DI TAGLIO", margin, 25);
+    doc.setDrawColor(226, 232, 240); doc.line(margin, 28, pageWidth - margin, 28);
     
-    let y = 65;
+    doc.setFontSize(10); doc.setTextColor(100);
+    doc.text(`CLIENTE: ${cliente || 'N/D'}`, margin, 35);
+    doc.text(`COMMESSA: ${commessa || 'N/D'}`, margin + 100, 35);
+    
+    let y = 45;
     for (const [code, data] of Object.entries(results)) {
-      doc.setFillColor(15, 23, 42); doc.rect(margin, y, 180, 12, 'F');
-      doc.setFontSize(14); doc.setTextColor(255); doc.text(`${code} - ${data.descrizione}`, margin + 5, y + 8);
-      y += 20;
+      if (y > 270) { doc.addPage(); y = 20; }
       
-      const barreToPrint = groupBars ? getGroupedBars(data.barre) : data.barre.map(b => ({ ...b, count: 1 }));
-      barreToPrint.forEach((bar, bIdx) => {
-        if (y > 260) { doc.addPage(); y = 20; }
-        doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
-        const label = bar.count > 1 ? `${bar.count}x BARRE IDENTICHE` : `BARRA ${bIdx + 1}`;
-        doc.text(`${label} - Taglio: ${bar.somma}mm | Sfrido: ${bar.residuo}mm`, margin, y);
-        y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-        doc.text(`Schema: ${bar.riepilogo}`, margin, y); y += 12;
+      // Calcolo totale barre per questo profilo
+      const totalBars = data.barre.length;
+      
+      // Intestazione Profilo Compatta: Quantità Codice Descrizione
+      doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
+      const profileHeader = `${totalBars}x  ${code} - ${data.descrizione}`;
+      doc.text(profileHeader, margin, y);
+      y += 2;
+      doc.setDrawColor(200); doc.line(margin, y, pageWidth - margin, y);
+      y += 6;
+      
+      // Raggruppiamo sempre le barre identiche per il PDF per risparmiare spazio (anche se groupBars è false, in stampa è meglio raggruppare le righe)
+      const barreToPrint = getGroupedBars(data.barre);
+      
+      barreToPrint.forEach((bar) => {
+        if (y > 275) { doc.addPage(); y = 20; }
+        
+        doc.setFontSize(9); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
+        
+        // Formattazione riga: 3x | Pezzo Pezzo Pezzo | Sfrido: 40mm
+        // Generiamo la lista di tutti i pezzi individuali senza raggrupparli (come richiesto per spuntarli a matita)
+        const pezziList = bar.tagli.map(t => 
+          `${t.lung}${t.angoli !== "90/90" ? `(${t.angoli})` : ""}`
+        ).join("    ");
+        
+        const rowPrefix = `${bar.count}x  |  `;
+        const rowSuffix = `  |  Sfrido: ${bar.residuo}mm`;
+        
+        // Usiamo splitTextToSize per gestire righe molto lunghe di pezzi
+        const fullRowText = pezziList;
+        const availableWidth = pageWidth - margin * 2 - 40; // Spazio per prefisso e suffisso
+        const lines = doc.splitTextToSize(fullRowText, availableWidth);
+        
+        doc.text(rowPrefix, margin, y);
+        
+        doc.setFont("helvetica", "normal");
+        lines.forEach((line: string, index: number) => {
+          if (index > 0) y += 4;
+          doc.text(line, margin + 15, y);
+        });
+        
+        doc.setFont("helvetica", "bold");
+        doc.text(rowSuffix, pageWidth - margin - 35, y, { align: 'right' });
+        
+        y += 7;
       });
-      y += 5;
+      y += 4; // Spazio tra profili diversi
     }
-    doc.save(`ALEA_Barre_${commessa || 'Export'}.pdf`);
+    
+    doc.save(`ALEA_Taglio_${commessa || 'Barre'}.pdf`);
   },
 
   panelToPdf: (results: PanelOptimizationResult, cliente: string, commessa: string, sheetW: number, sheetH: number) => {
