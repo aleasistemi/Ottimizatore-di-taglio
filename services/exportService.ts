@@ -18,7 +18,6 @@ export const exportService = {
     const margin = 15;
     const pageWidth = 210;
     
-    // Intestazione ALEA
     doc.setFontSize(22); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold"); doc.text("ALEA SISTEMI", margin, 20);
     doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.text("DISTINTA TECNICA DI TAGLIO", margin, 25);
     doc.setDrawColor(226, 232, 240); doc.line(margin, 28, pageWidth - margin, 28);
@@ -39,7 +38,6 @@ export const exportService = {
       doc.setDrawColor(200); doc.line(margin, y, pageWidth - margin, y);
       y += 6;
       
-      // Rispetta la scelta dell'utente: raggruppa se richiesto, altrimenti mostra barre singole
       const barreToPrint = groupBars 
         ? getGroupedBars(data.barre) 
         : data.barre.map(b => ({ ...b, count: 1 }));
@@ -56,7 +54,6 @@ export const exportService = {
         const rowPrefix = `${bar.count}x  |  `;
         const rowSuffix = `  |  Sfrido: ${bar.residuo}mm`;
         
-        // Calcolo larghezze per evitare sovrapposizioni (come da correzione screenshot)
         const availableWidthForPezzi = 120; 
         const lines = doc.splitTextToSize(pezziList, availableWidthForPezzi);
         
@@ -109,15 +106,44 @@ export const exportService = {
         doc.setDrawColor(0); doc.setLineWidth(0.5);
         doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
 
+        // Gestione Legenda Pezzi Piccoli
+        const legendMap = new Map<string, number>();
+        let nextIdx = 1;
+
         sheet.panels.forEach(p => {
           doc.setFillColor(245, 245, 245);
           doc.rect(offsetX + p.x * scale, offsetY + p.y * scale, p.w * scale, p.h * scale, 'FD');
-          if (p.w * scale > 15) {
-            doc.setFontSize(8); doc.setTextColor(0); doc.setFont("helvetica", "bold");
-            doc.text(`${p.w}x${p.h}`, offsetX + (p.x + p.w/2)*scale, offsetY + (p.y + p.h/2)*scale, { align: 'center' });
+          
+          const label = `${p.w}x${p.h}`;
+          const fits = (p.w * scale > 18) && (p.h * scale > 8);
+          
+          let textToShow = label;
+          if (!fits) {
+            if (!legendMap.has(label)) legendMap.set(label, nextIdx++);
+            textToShow = String(legendMap.get(label));
           }
+
+          doc.setFontSize(fits ? 7 : 9); 
+          doc.setTextColor(0); 
+          doc.setFont("helvetica", "bold");
+          doc.text(textToShow, offsetX + (p.x + p.w/2)*scale, offsetY + (p.y + p.h/2)*scale + 1, { align: 'center' });
         });
         
+        // Stampa Legenda se presente
+        if (legendMap.size > 0) {
+          doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold");
+          doc.text("LEGENDA PEZZI PICCOLI:", margin, 215);
+          
+          doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "normal");
+          let lx = margin;
+          let ly = 222;
+          Array.from(legendMap.entries()).sort((a,b) => a[1]-b[1]).forEach(([dim, idx], i) => {
+            doc.text(`${idx}) ${dim} mm`, lx, ly);
+            lx += 45;
+            if ((i + 1) % 4 === 0) { lx = margin; ly += 6; }
+          });
+        }
+
         doc.setFontSize(10); doc.setTextColor(100);
         doc.text(`Residuo Area: ${sheet.residuo.toLocaleString()} mm2`, margin, 280);
       });
