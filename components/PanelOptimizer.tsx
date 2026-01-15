@@ -6,7 +6,6 @@ import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
 
-// Riutilizziamo la stessa logica del componente SearchableSelect per coerenza UI
 const SearchableSelect = ({ 
   label, 
   value, 
@@ -125,7 +124,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
   const loadData = () => {
-    // Caricamento e ordinamento alfabetico
     const pRaw = localStorage.getItem('alea_panel_materials') || '[]';
     const cRaw = localStorage.getItem('alea_clients') || '[]';
     const clRaw = localStorage.getItem('alea_colors') || '[]';
@@ -220,13 +218,26 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     ctx.strokeRect(0, 0, sheetW * scale, sheetH * scale);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sheetW * scale, sheetH * scale);
     
+    const legendMap = new Map<string, number>();
+    let nextIdx = 1;
+
     sheet.panels.forEach((p: any) => {
         ctx.fillStyle = '#f8fafc'; ctx.fillRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
         ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.strokeRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
-        if (p.w * scale > 30) {
-          ctx.fillStyle = 'black'; ctx.font = 'bold 10px Inter'; ctx.textAlign = 'center';
-          ctx.fillText(`${p.w}x${p.h}`, p.x * scale + (p.w * scale / 2), p.y * scale + (p.h * scale / 2) + 4);
+        
+        const label = `${p.w}x${p.h}`;
+        const fits = (p.w * scale > 45) && (p.h * scale > 20);
+
+        let textToDraw = label;
+        if (!fits) {
+          if (!legendMap.has(label)) legendMap.set(label, nextIdx++);
+          textToDraw = String(legendMap.get(label));
         }
+
+        ctx.fillStyle = 'black'; 
+        ctx.font = fits ? 'bold 10px Inter' : 'bold 16px Inter'; 
+        ctx.textAlign = 'center';
+        ctx.fillText(textToDraw, p.x * scale + (p.w * scale / 2), p.y * scale + (p.h * scale / 2) + 5);
     });
   };
 
@@ -240,22 +251,24 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     }
   }, [results, larghezzaLastra, altezzaLastra]);
 
+  const getSheetLegend = (sheet: any, sheetW: number, sheetH: number) => {
+    const scale = Math.min(800 / sheetW, 500 / sheetH);
+    const legendMap = new Map<string, number>();
+    let nextIdx = 1;
+    sheet.panels.forEach((p: any) => {
+      const label = `${p.w}x${p.h}`;
+      const fits = (p.w * scale > 45) && (p.h * scale > 20);
+      if (!fits && !legendMap.has(label)) legendMap.set(label, nextIdx++);
+    });
+    return Array.from(legendMap.entries()).sort((a,b) => a[1]-b[1]);
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 pb-10">
       <div className="space-y-6">
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
            <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><FileText className="w-5 h-5 text-red-600" /> Dettagli Commessa</h3>
-           
-           <SearchableSelect 
-              label="Cliente"
-              value={cliente}
-              options={availableClients}
-              onChange={setCliente}
-              placeholder="Cerca cliente..."
-              displayKey="nome"
-              valueKey="nome"
-           />
-
+           <SearchableSelect label="Cliente" value={cliente} options={availableClients} onChange={setCliente} placeholder="Cerca cliente..." displayKey="nome" valueKey="nome" />
            <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Commessa / Rif.</label>
              <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} placeholder="Commessa..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
@@ -264,18 +277,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
 
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
            <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Square className="w-5 h-5 text-red-600" /> Lastra Officina</h3>
-           
-           <SearchableSelect 
-              label="Seleziona Pannello Archivio"
-              value={selectedPanelId}
-              options={availablePanels}
-              onChange={handleSelectPanel}
-              placeholder="-- Configura Libera --"
-              displayKey="codice"
-              valueKey="id"
-              secondaryKey="materiale"
-           />
-           
+           <SearchableSelect label="Seleziona Pannello Archivio" value={selectedPanelId} options={availablePanels} onChange={handleSelectPanel} placeholder="-- Configura Libera --" displayKey="codice" valueKey="id" secondaryKey="materiale" />
            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Base (mm)</label>
@@ -286,7 +288,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                  <input type="number" value={altezzaLastra} onChange={e=>setAltezzaLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black" />
               </div>
            </div>
-           
            <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Colore Pannello</label>
              <select value={coloreLastra} onChange={e=>setColoreLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500 bg-slate-50">
@@ -294,7 +295,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                 {availableColors.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
              </select>
            </div>
-
            <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Nome Materiale (per distinta)</label>
              <input type="text" value={materiale} onChange={e=>setMateriale(e.target.value)} placeholder="Es: Lexan 3mm..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none" />
@@ -351,9 +351,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                        <td className="p-5 text-center"><button onClick={()=>setDistinta(prev=>prev.filter(x=>x.id!==c.id))} className="p-2 text-slate-300 hover:text-red-600 transition-all"><Trash2 className="w-5 h-5"/></button></td>
                     </tr>
                   ))}
-                  {distinta.length === 0 && (
-                    <tr><td colSpan={4} className="p-20 text-center text-slate-300 italic font-bold">Nessun pezzo in distinta.</td></tr>
-                  )}
                 </tbody>
              </table>
           </div>
@@ -383,19 +380,36 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                       </div>
                    </div>
 
-                   {group.sheets.map((sheet: any, sIdx: number) => (
-                      <div key={sIdx} className="bg-white p-8 sm:p-10 rounded-[3rem] border shadow-2xl space-y-8">
-                         <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-6 gap-2">
-                            <span className="text-lg font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><ChevronRight className="w-6 h-6 text-red-600" /> Foglio {sIdx + 1}</span>
-                            <div className="flex gap-4">
-                                <span className="text-[10px] font-black text-red-600 uppercase bg-red-50 px-5 py-2 rounded-full border border-red-100">Sfrido: {sheet.residuo.toLocaleString()} mm²</span>
-                            </div>
-                         </div>
-                         <div className="flex justify-center bg-slate-50 p-4 sm:p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 shadow-inner">
-                            <canvas ref={el => canvasRefs.current[`${key}-${sIdx}`] = el} width={800} height={500} className="max-w-full rounded-2xl shadow-2xl bg-white border-2 border-slate-900" />
-                         </div>
-                      </div>
-                   ))}
+                   {group.sheets.map((sheet: any, sIdx: number) => {
+                      const legend = getSheetLegend(sheet, parseFloat(larghezzaLastra), parseFloat(altezzaLastra));
+                      return (
+                        <div key={sIdx} className="bg-white p-8 sm:p-10 rounded-[3rem] border shadow-2xl space-y-8">
+                           <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-6 gap-2">
+                              <span className="text-lg font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><ChevronRight className="w-6 h-6 text-red-600" /> Foglio {sIdx + 1}</span>
+                              <div className="flex gap-4">
+                                  <span className="text-[10px] font-black text-red-600 uppercase bg-red-50 px-5 py-2 rounded-full border border-red-100">Sfrido: {sheet.residuo.toLocaleString()} mm²</span>
+                              </div>
+                           </div>
+                           <div className="flex flex-col items-center gap-8 bg-slate-50 p-4 sm:p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 shadow-inner">
+                              <canvas ref={el => canvasRefs.current[`${key}-${sIdx}`] = el} width={800} height={500} className="max-w-full rounded-2xl shadow-2xl bg-white border-2 border-slate-900" />
+                              
+                              {legend.length > 0 && (
+                                <div className="w-full bg-white p-6 rounded-2xl border shadow-sm">
+                                  <h5 className="text-[10px] font-black text-red-600 uppercase mb-4 tracking-widest">Legenda Pezzi Piccoli:</h5>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    {legend.map(([dim, idx]) => (
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-[10px] font-black">{idx}</span>
+                                        <span className="text-xs font-bold text-slate-600">{dim} mm</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                           </div>
+                        </div>
+                      );
+                   })}
                 </div>
              ))}
           </div>
