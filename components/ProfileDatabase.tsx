@@ -19,18 +19,22 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const [isAdding, setIsAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Stati per il database
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [panelMaterials, setPanelMaterials] = useState<PanelMaterial[]>([]);
   const [commesse, setCommesse] = useState<CommessaArchiviata[]>([]);
   const [colors, setColors] = useState<AleaColor[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
 
+  // Stati per Archivio Commesse (Filtri e Selezione)
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedCommessaIds, setSelectedCommessaIds] = useState<string[]>([]);
 
+  // Stati per il Setup Cloud
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('alea_sb_url') || '');
   const [sbKey, setSbKey] = useState(localStorage.getItem('alea_sb_key') || '');
 
+  // Form stati
   const [profileForm, setProfileForm] = useState<Profile>({ codice: '', descr: '', lungMax: 6000 });
   const [panelForm, setPanelForm] = useState<PanelMaterial>({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
   const [colorForm, setColorForm] = useState<AleaColor>({ id: '', nome: '' });
@@ -191,6 +195,42 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     setSelectedCommessaIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  const sqlSetupScript = `
+-- ESEGUI QUESTO SCRIPT PER CONFIGURARE UN NUOVO DATABASE SUPABASE
+CREATE TABLE IF NOT EXISTS profiles (
+  codice TEXT PRIMARY KEY,
+  descr TEXT,
+  "lungMax" INTEGER
+);
+CREATE TABLE IF NOT EXISTS panel_materials (
+  id TEXT PRIMARY KEY,
+  codice TEXT,
+  materiale TEXT,
+  descr TEXT,
+  "lungDefault" INTEGER,
+  "altDefault" INTEGER,
+  "giraPezzoDefault" BOOLEAN DEFAULT true
+);
+CREATE TABLE IF NOT EXISTS colors (
+  id TEXT PRIMARY KEY,
+  nome TEXT
+);
+CREATE TABLE IF NOT EXISTS clients (
+  id TEXT PRIMARY KEY,
+  nome TEXT,
+  note TEXT,
+  "dataAggiunta" TEXT
+);
+CREATE TABLE IF NOT EXISTS commesse (
+  id TEXT PRIMARY KEY,
+  numero TEXT,
+  cliente TEXT,
+  data TEXT,
+  tipo TEXT,
+  dettagli JSONB
+);
+  `.trim();
+
   return (
     <div className="bg-white rounded-[2rem] border shadow-xl overflow-hidden min-h-[600px]">
       <div className="flex border-b bg-slate-50 overflow-x-auto">
@@ -233,6 +273,13 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
                   <CheckCircle2 className="w-5 h-5 text-green-400" /> CONNETTI E SINCRONIZZA
                 </button>
               </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-red-600 font-black text-xs uppercase"><Code className="w-5 h-5" /> Inizializzazione Database (SQL Editor)</div>
+                <div className="bg-slate-900 p-6 rounded-[2rem] text-white relative">
+                  <button onClick={() => { navigator.clipboard.writeText(sqlSetupScript); alert("Script SQL copiato!"); }} className="absolute top-4 right-4 bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all"><Copy className="w-4 h-4" /></button>
+                  <pre className="text-[10px] font-mono leading-tight text-blue-300 overflow-x-auto whitespace-pre-wrap">{sqlSetupScript}</pre>
+                </div>
+              </div>
            </div>
         ) : (
            <div className="space-y-6">
@@ -250,6 +297,11 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
                             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                        </div>
+                       {selectedCommessaIds.length > 0 && (
+                          <button onClick={handleDeleteBulkCommesse} className="bg-red-50 text-red-600 border-2 border-red-100 px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all animate-in zoom-in-95">
+                            Elimina {selectedCommessaIds.length}
+                          </button>
+                       )}
                     </div>
                  )}
 
@@ -270,17 +322,55 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
                  </div>
               </div>
 
-              {/* Form Aggiunta Pannelli - Aggiornato senza Colore */}
+              {/* Form Aggiunta Profili */}
+              {isAdding && activeTab === 'profili' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95">
+                   <input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} placeholder="Codice Profilo..." className="p-3 border rounded-xl font-black" />
+                   <input type="text" value={profileForm.descr} onChange={e=>setProfileForm({...profileForm, descr: e.target.value})} placeholder="Descrizione..." className="p-3 border rounded-xl font-bold" />
+                   <div className="flex gap-2">
+                     <input type="number" value={profileForm.lungMax || 6000} onChange={e=>setProfileForm({...profileForm, lungMax: parseInt(e.target.value)})} className="flex-1 p-3 border rounded-xl font-black" />
+                     <button onClick={handleSaveProfile} className="bg-slate-900 text-white px-6 rounded-xl shadow-lg"><Save className="w-5 h-5"/></button>
+                     <button onClick={()=>setIsAdding(false)} className="bg-white border p-3 rounded-xl"><X className="w-5 h-5"/></button>
+                   </div>
+                </div>
+              )}
+
+              {/* Form Aggiunta Pannelli */}
               {isAdding && activeTab === 'pannelli' && (
-                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4 shadow-inner">
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <input type="text" value={panelForm.codice} onChange={e=>setPanelForm({...panelForm, codice: e.target.value.toUpperCase()})} placeholder="Codice Materiale..." className="p-3 border rounded-xl font-black" />
-                      <input type="text" value={panelForm.materiale} onChange={e=>setPanelForm({...panelForm, materiale: e.target.value})} placeholder="Nome Materiale..." className="p-3 border rounded-xl font-bold" />
+                      <input type="text" value={panelForm.codice} onChange={e=>setPanelForm({...panelForm, codice: e.target.value.toUpperCase()})} placeholder="Codice..." className="p-3 border rounded-xl font-black" />
+                      <input type="text" value={panelForm.materiale} onChange={e=>setPanelForm({...panelForm, materiale: e.target.value})} placeholder="Materiale..." className="p-3 border rounded-xl font-bold" />
                       <input type="number" value={panelForm.lungDefault} onChange={e=>setPanelForm({...panelForm, lungDefault: parseInt(e.target.value)})} placeholder="Base (mm)" className="p-3 border rounded-xl font-black" />
                       <input type="number" value={panelForm.altDefault} onChange={e=>setPanelForm({...panelForm, altDefault: parseInt(e.target.value)})} placeholder="Altezza (mm)" className="p-3 border rounded-xl font-black" />
                    </div>
                    <div className="flex gap-4">
-                      <button onClick={handleSavePanel} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg flex items-center justify-center gap-2"><Save className="w-5 h-5" /> Salva Pannello</button>
+                      <button onClick={handleSavePanel} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg">Salva Pannello</button>
+                      <button onClick={()=>setIsAdding(false)} className="px-10 bg-white border rounded-xl font-black uppercase">Annulla</button>
+                   </div>
+                </div>
+              )}
+
+              {/* Form Aggiunta Colori */}
+              {isAdding && activeTab === 'colori' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 flex flex-col md:flex-row gap-4">
+                   <input type="text" value={colorForm.nome} onChange={e=>setColorForm({...colorForm, nome: e.target.value})} placeholder="Nome Colore..." className="flex-1 p-3 border rounded-xl font-bold uppercase" />
+                   <div className="flex gap-2">
+                      <button onClick={handleSaveColor} className="bg-slate-900 text-white px-10 py-3.5 rounded-xl font-black uppercase shadow-lg flex items-center gap-2"><Save className="w-5 h-5"/> Salva Colore</button>
+                      <button onClick={()=>setIsAdding(false)} className="bg-white border p-3 rounded-xl"><X className="w-5 h-5"/></button>
+                   </div>
+                </div>
+              )}
+
+              {/* Form Aggiunta Clienti */}
+              {isAdding && activeTab === 'clienti' && (
+                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input type="text" value={clientForm.nome} onChange={e=>setClientForm({...clientForm, nome: e.target.value})} placeholder="Nome Cliente..." className="p-3 border rounded-xl font-black uppercase" />
+                      <input type="text" value={clientForm.note || ''} onChange={e=>setClientForm({...clientForm, note: e.target.value})} placeholder="Note / Indirizzo..." className="p-3 border rounded-xl font-bold" />
+                   </div>
+                   <div className="flex gap-4">
+                      <button onClick={handleSaveClient} className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-black uppercase shadow-lg flex items-center justify-center gap-2"><Save className="w-5 h-5"/> Salva Cliente</button>
                       <button onClick={()=>setIsAdding(false)} className="px-10 bg-white border rounded-xl font-black uppercase">Annulla</button>
                    </div>
                 </div>
@@ -290,13 +380,30 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
                 <table className="w-full text-left">
                    <thead className="bg-slate-50 border-b text-[10px] font-black uppercase text-slate-400">
                       <tr>
-                        {activeTab === 'commesse' && <th className="px-6 py-5 w-10">Sel.</th>}
+                        {activeTab === 'commesse' && (
+                          <th className="px-6 py-5 w-10">
+                             <button onClick={toggleSelectAll} className="p-1 hover:bg-slate-200 rounded transition-all">
+                               {selectedCommessaIds.length === filteredCommesse.length && filteredCommesse.length > 0 ? <CheckSquare className="w-4 h-4 text-red-600" /> : <SquareIcon className="w-4 h-4" />}
+                             </button>
+                          </th>
+                        )}
                         <th className="px-6 py-5">Nome / Codice</th>
                         <th className="px-6 py-5">Dettaglio</th>
                         <th className="px-6 py-5 text-center">Azioni</th>
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
+                      {activeTab === 'profili' && profiles.filter(p=>p.codice.includes(searchTerm.toUpperCase())).map(p => (
+                         <tr key={p.codice} className="hover:bg-slate-50 transition-all font-bold">
+                            <td className="px-6 py-5 uppercase font-black">{p.codice} <div className="text-[10px] text-slate-400 font-normal">{p.descr}</div></td>
+                            <td className="px-6 py-5 text-red-600 font-black">{p.lungMax} mm</td>
+                            <td className="px-6 py-5 text-center flex justify-center gap-2">
+                               <button onClick={()=>{setProfileForm(p); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
+                               <button onClick={()=>deleteItem('profili', p.codice)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                            </td>
+                         </tr>
+                      ))}
+
                       {activeTab === 'pannelli' && panelMaterials.filter(p=>p.codice.includes(searchTerm.toUpperCase())).map(p => (
                          <tr key={p.id} className="hover:bg-slate-50 transition-all font-bold">
                             <td className="px-6 py-5 uppercase font-black">{p.codice} <div className="text-[10px] text-slate-400 font-normal">{p.materiale}</div></td>
@@ -307,6 +414,59 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
                             </td>
                          </tr>
                       ))}
+
+                      {activeTab === 'colori' && colors.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
+                           <td className="px-6 py-5 uppercase font-black">{c.nome}</td>
+                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase font-bold italic tracking-tighter">Colore RAL/Standard</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={()=>deleteItem('colori', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                           </td>
+                        </tr>
+                      ))}
+
+                      {activeTab === 'clienti' && clients.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
+                           <td className="px-6 py-5 uppercase font-black">{c.nome} <div className="text-[10px] text-slate-400 font-normal">{c.note}</div></td>
+                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase font-bold tracking-tighter">Aggiunto il: {new Date(c.dataAggiunta).toLocaleDateString()}</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={()=>{setClientForm(c); setIsAdding(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Edit3 className="w-5 h-5"/></button>
+                              <button onClick={()=>deleteItem('clienti', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                           </td>
+                        </tr>
+                      ))}
+
+                      {activeTab === 'commesse' && filteredCommesse.map(c => (
+                        <tr key={c.id} className={`hover:bg-slate-50 font-bold transition-all ${selectedCommessaIds.includes(c.id) ? 'bg-red-50/30' : ''}`}>
+                           <td className="px-6 py-5">
+                             <button onClick={() => toggleSelectCommessa(c.id)} className="p-1">
+                               {selectedCommessaIds.includes(c.id) ? <CheckSquare className="w-4 h-4 text-red-600" /> : <SquareIcon className="w-4 h-4 text-slate-300" />}
+                             </button>
+                           </td>
+                           <td className="px-6 py-5 uppercase font-black">{c.numero} <div className="text-[10px] text-slate-400 font-normal">{c.cliente}</div></td>
+                           <td className="px-6 py-5 text-[10px] uppercase text-slate-400">{c.tipo} | {new Date(c.data).toLocaleDateString()}</td>
+                           <td className="px-6 py-5 text-center flex justify-center gap-2">
+                              <button onClick={() => onOpenCommessa?.(c)} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm active:scale-95 transition-all">Apri</button>
+                              <button onClick={() => deleteItem('commesse', c.id)} className="p-2 text-slate-300 hover:text-red-600 transition-all"><Trash2 className="w-4 h-4"/></button>
+                           </td>
+                        </tr>
+                      ))}
+
+                      {activeTab === 'commesse' && filteredCommesse.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessuna commessa trovata per l'anno {selectedYear}.</td></tr>
+                      )}
+                      {activeTab === 'profili' && profiles.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun profilo in archivio.</td></tr>
+                      )}
+                      {activeTab === 'pannelli' && panelMaterials.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun materiale pannello in archivio.</td></tr>
+                      )}
+                      {activeTab === 'colori' && colors.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun colore salvato.</td></tr>
+                      )}
+                      {activeTab === 'clienti' && clients.length === 0 && (
+                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun cliente salvato.</td></tr>
+                      )}
                    </tbody>
                 </table>
               </div>
