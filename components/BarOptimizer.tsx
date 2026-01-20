@@ -10,6 +10,7 @@ interface BarOptimizerProps {
   externalData?: CommessaArchiviata | null;
 }
 
+// Semplice componente interno per la selezione con ricerca
 const SearchableSelect = ({ 
   label, 
   value, 
@@ -129,25 +130,32 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     const profilesRaw = localStorage.getItem('alea_profiles');
     if (profilesRaw) {
       const parsed = JSON.parse(profilesRaw) as Profile[];
+      // Ordinamento Alfabetico per Codice
       setAvailableProfiles(parsed.sort((a, b) => a.codice.localeCompare(b.codice)));
     }
     
     const clientsRaw = localStorage.getItem('alea_clients');
     if (clientsRaw) {
       const parsed = JSON.parse(clientsRaw) as Client[];
+      // Ordinamento Alfabetico per Nome
       setAvailableClients(parsed.sort((a, b) => a.nome.localeCompare(b.nome)));
     }
   };
 
   useEffect(() => {
     loadData();
+
     if (externalData && externalData.tipo === 'barre') {
       setCliente(externalData.cliente);
       setCommessa(externalData.numero);
       setDistinta(externalData.dettagli.distinta || []);
       setResults(externalData.dettagli.results || null);
     }
-    const handleUpdate = () => loadData();
+
+    const handleUpdate = () => {
+      loadData();
+    };
+
     window.addEventListener('alea_data_updated', handleUpdate);
     return () => window.removeEventListener('alea_data_updated', handleUpdate);
   }, [externalData]);
@@ -157,7 +165,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       const p = availableProfiles.find(ap => ap.codice === selectedProfile);
       if (p) {
         setLunghezzaBarra(p.lungMax?.toString() || "6000");
-        setIsBarLocked(true); // Auto-lock quando cambia il profilo
+        setIsBarLocked(true);
       }
     }
   }, [selectedProfile, availableProfiles]);
@@ -173,45 +181,38 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       return;
     }
 
-    const lungT = parseFloat(lunghezzaTaglio.replace(',', '.'));
-    const lungB = parseFloat(lunghezzaBarra);
+    const valTaglio = parseFloat(lunghezzaTaglio.replace(',', '.'));
+    const valBarra = parseFloat(lunghezzaBarra.replace(',', '.'));
+    
+    // Calcolo lunghezza utile effettiva
+    const lunghezzaUtile = valBarra - scartoIniziale - scartoFinale;
 
-    if (lungT > (lungB - scartoIniziale - scartoFinale)) {
-      alert(`MISURA TAGLIO ERRATA: Il taglio (${lungT}mm) è più lungo della capacità della barra (${lungB - scartoIniziale - scartoFinale}mm).`);
+    if (valTaglio > lunghezzaUtile) {
+      alert(`ATTENZIONE: La lunghezza del taglio (${valTaglio}mm) supera la capacità utile della barra (${lunghezzaUtile}mm).\n\nL. Barra: ${valBarra}mm\nScarto In.: ${scartoIniziale}mm\nScarto Fin.: ${scartoFinale}mm`);
       return;
     }
 
     const newCut: CutRequest = {
       id: Math.random().toString(36).substr(2, 9),
       codice: selectedProfile,
-      lung: lungT,
+      lung: valTaglio,
       qty: quantita,
       angoli: `${angoloSx}/${angoloDx}`,
       lama,
       scIn: scartoIniziale,
       scFin: scartoFinale,
-      lungBarra: lungB
+      lungBarra: valBarra
     };
-
     setDistinta(prev => [...prev, newCut]);
     setLunghezzaTaglio('');
     setQuantita(1);
-    resetAngles();
   };
 
-  const runOptimization = () => {
+  const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
-    setIsOptimizing(true);
-    setTimeout(() => {
-      const res = optimizerService.optimizeBars(distinta);
-      setResults(res);
-      setIsOptimizing(false);
-    }, 600);
-  };
-
-  const saveCommessa = async () => {
-    if (distinta.length === 0) return;
-    const currentCommesse = JSON.parse(localStorage.getItem('alea_commesse') || '[]');
+    
+    const commesseJson = localStorage.getItem('alea_commesse') || '[]';
+    const commesse = JSON.parse(commesseJson);
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
       numero: commessa || 'Senza Rif.',
@@ -220,191 +221,280 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       tipo: 'barre',
       dettagli: { distinta, results }
     };
-    const aggiornate = [nuovaCommessa, ...currentCommesse];
-    localStorage.setItem('alea_commesse', JSON.stringify(aggiornate));
-    window.dispatchEvent(new CustomEvent('alea_local_mutation'));
-    if (supabaseService.isInitialized()) await supabaseService.syncTable('commesse', aggiornate);
-    alert("Archiviato con successo!");
+    const updatedCommesse = [nuovaCommessa, ...commesse];
+    localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
+    
+    if (supabaseService.isInitialized()) {
+        try {
+            await supabaseService.syncTable('commesse', updatedCommesse);
+            alert("Commessa archiviata sul Cloud ALEA!");
+        } catch (e) {
+            alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
+        }
+    } else {
+        alert("Archiviata nell'archivio locale!");
+    }
+  };
+
+  const removeCut = (id: string) => setDistinta(prev => prev.filter(c => c.id !== id));
+
+  const runOptimization = () => {
+    if (distinta.length === 0) return;
+    setIsOptimizing(true);
+    setTimeout(() => {
+      const result = optimizerService.optimizeBars(distinta);
+      setResults(result);
+      setIsOptimizing(false);
+    }, 600);
+  };
+
+  const getGroupedBars = (barre: OptimizedBar[]): GroupedBarResult[] => {
+    const groups: Record<string, GroupedBarResult> = {};
+    barre.forEach(bar => {
+      const fingerprint = bar.tagli.map(t => `${t.lung}-${t.angoli}`).join('|');
+      if (groups[fingerprint]) groups[fingerprint].count++;
+      else groups[fingerprint] = { ...bar, count: 1 };
+    });
+    return Object.values(groups);
+  };
+
+  const getPezziSummary = (barre: OptimizedBar[]) => {
+    const summary: Record<string, { qty: number, lung: number, angoli: string }> = {};
+    barre.forEach(bar => {
+      bar.tagli.forEach(t => {
+        const key = `${t.lung}-${t.angoli}`;
+        if (summary[key]) summary[key].qty++;
+        else summary[key] = { qty: 1, lung: t.lung, angoli: t.angoli };
+      });
+    });
+    return Object.values(summary).sort((a, b) => b.lung - a.lung);
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 pb-10">
-      <div className="space-y-6">
-        <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><FileText className="w-5 h-5 text-red-600" /> Dettagli Commessa</h3>
-           <SearchableSelect label="Cliente" value={cliente} options={availableClients} onChange={setCliente} placeholder="Cerca cliente..." displayKey="nome" valueKey="nome" />
-           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Commessa / Rif.</label>
-             <input type="text" value={commessa} onChange={e=>setCommessa(e.target.value)} placeholder="Commessa..." className="w-full p-4 border rounded-2xl font-bold focus:ring-2 focus:ring-red-500 outline-none transition-all" />
-           </div>
-        </section>
-
-        <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Warehouse className="w-5 h-5 text-red-600" /> Barra Grezza</h3>
-           <SearchableSelect label="Profilo in Archivio" value={selectedProfile} options={availableProfiles} onChange={setSelectedProfile} placeholder="Seleziona Profilo..." displayKey="codice" valueKey="codice" />
-           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Lunghezza Barra (mm)</label>
-             <div className="relative">
-                <input 
-                  type="number" 
-                  value={lunghezzaBarra} 
-                  onChange={e=>setLunghezzaBarra(e.target.value)} 
-                  readOnly={isBarLocked}
-                  className={`w-full p-4 pr-12 border rounded-2xl font-black transition-all outline-none ${isBarLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'focus:ring-2 focus:ring-red-500 border-slate-200'}`} 
-                />
-                <button 
-                  onClick={() => setIsBarLocked(!isBarLocked)}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${isBarLocked ? 'text-slate-400 hover:text-slate-600' : 'text-red-600 bg-red-50'}`}
-                  title={isBarLocked ? "Sblocca per modificare" : "Blocca misura"}
-                >
-                  {isBarLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                </button>
-             </div>
-           </div>
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                 <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Scarto Inizio</label>
-                 <input type="number" value={scartoIniziale} onChange={e=>setScartoIniziale(parseInt(e.target.value)||0)} className="w-full p-3 border rounded-xl font-bold" />
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 space-y-6">
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl">
+            <h3 className="text-sm font-black text-slate-800 mb-6 flex items-center space-x-2 uppercase tracking-tighter">
+              <FileText className="w-5 h-5 text-red-600" />
+              <span>Dettagli Commessa</span>
+            </h3>
+            <div className="space-y-5">
+              <SearchableSelect 
+                label="Cliente"
+                value={cliente}
+                options={availableClients}
+                onChange={setCliente}
+                placeholder="Cerca cliente..."
+                displayKey="nome"
+                valueKey="nome"
+              />
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Commessa / Rif.</label>
+                <input type="text" value={commessa} onChange={e => setCommessa(e.target.value)} placeholder="ID commessa..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all font-medium" />
               </div>
-              <div className="space-y-1">
-                 <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Scarto Fine</label>
-                 <input type="number" value={scartoFinale} onChange={e=>setScartoFinale(parseInt(e.target.value)||0)} className="w-full p-3 border rounded-xl font-bold" />
-              </div>
-           </div>
-        </section>
-
-        <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Plus className="w-5 h-5 text-red-600" /> Nuovo Taglio</h3>
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1 col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Lunghezza mm</label>
-                <input type="text" value={lunghezzaTaglio} onChange={e=>setLunghezzaTaglio(e.target.value)} placeholder="0.0" className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-red-600 focus:ring-2 focus:ring-red-600 outline-none" />
-              </div>
-              <div className="space-y-1 col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Quantità</label>
-                <input type="number" value={quantita} onChange={e=>setQuantita(parseInt(e.target.value)||1)} className="w-full p-4 border rounded-2xl font-black focus:ring-2 focus:ring-red-600 outline-none" />
-              </div>
-           </div>
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                 <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Angolo Sx</label>
-                 <select value={angoloSx} onChange={e=>setAngoloSx(e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none">
-                    {['90', '45', '135', '60', '30'].map(a => <option key={a} value={a}>{a}°</option>)}
-                 </select>
-              </div>
-              <div className="space-y-1">
-                 <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Angolo Dx</label>
-                 <select value={angoloDx} onChange={e=>setAngoloDx(e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none">
-                    {['90', '45', '135', '60', '30'].map(a => <option key={a} value={a}>{a}°</option>)}
-                 </select>
-              </div>
-           </div>
-           <div className="flex items-center gap-4 px-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase">Spessore Lama:</label>
-              <input type="number" value={lama} onChange={e=>setLama(parseFloat(e.target.value))} className="w-16 p-2 border rounded-lg text-center font-bold" />
-           </div>
-           <button onClick={handleAddCut} className="w-full bg-red-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-sm mt-2">Aggiungi Taglio</button>
-        </section>
-      </div>
-
-      <div className="lg:col-span-2 space-y-6">
-        <section className="bg-white rounded-[2.5rem] border shadow-xl flex flex-col h-[520px]">
-          <div className="p-6 border-b flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xs font-black uppercase text-slate-500 tracking-widest">Distinta Taglio</h3>
-            <div className="flex gap-4">
-              <button onClick={saveCommessa} className="text-[10px] font-black bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 shadow-lg flex gap-2 items-center transition-all active:scale-95"><Save className="w-3.5 h-3.5"/> Archivia</button>
-              <button onClick={()=>setDistinta([])} className="text-xs text-red-500 font-bold uppercase hover:underline">Svuota tutto</button>
             </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-             <table className="w-full text-left text-xs">
-                <thead><tr className="border-b font-black text-slate-400 uppercase tracking-widest bg-slate-50/20"><th className="p-5">Profilo</th><th className="p-5">Lunghezza</th><th className="p-5 text-center">Quantità</th><th className="p-5 text-center">Angoli</th><th className="p-5 text-center">Azioni</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {distinta.map(cut => (
-                    <tr key={cut.id} className="font-bold hover:bg-slate-50 transition-all group">
-                       <td className="p-5 text-slate-900 uppercase font-black">{cut.codice}</td>
-                       <td className="p-5 text-slate-900 font-black text-sm">{cut.lung} mm</td>
-                       <td className="p-5 text-center bg-slate-50/50"><span className="text-red-600 font-black text-sm">{cut.qty}</span> pz</td>
-                       <td className="p-5 text-center text-[10px] text-slate-400">{cut.angoli}</td>
-                       <td className="p-5 text-center"><button onClick={()=>setDistinta(prev=>prev.filter(c=>c.id!==cut.id))} className="p-2 text-slate-300 hover:text-red-600 transition-all"><Trash2 className="w-5 h-5"/></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-             </table>
-          </div>
-          <div className="p-6 bg-slate-50 border-t"><button onClick={runOptimization} disabled={distinta.length === 0 || isOptimizing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase shadow-2xl hover:bg-slate-800 transition-all tracking-[0.2em] text-sm">
-            {isOptimizing ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto"></div> : "Calcola Tagli Ottimali"}
-          </button></div>
-        </section>
+          </section>
 
-        {results && (
-          <div className="space-y-10 animate-in slide-in-from-bottom-5 duration-700">
-             <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-8 rounded-[2rem] border shadow-lg gap-4">
-                <h3 className="font-black text-2xl uppercase tracking-tighter flex items-center gap-3"><Boxes className="w-7 h-7 text-red-600" /> Soluzione Ottimizzata</h3>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 cursor-pointer hover:text-slate-600">
-                    <input type="checkbox" checked={groupBars} onChange={e=>setGroupBars(e.target.checked)} className="w-4 h-4 rounded text-red-600" />
-                    Raggruppa barre identiche
-                  </label>
-                  <button onClick={()=>exportService.toPdf(results, cliente, commessa, groupBars)} className="bg-red-600 text-white px-10 py-4 rounded-2xl font-black flex gap-2 shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-xs"><Download /> Esporta PDF</button>
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl">
+            <h3 className="text-sm font-black text-slate-800 mb-6 flex items-center space-x-2 uppercase tracking-tighter">
+              <Plus className="w-5 h-5 text-red-600" />
+              <span>Aggiunta Taglio</span>
+            </h3>
+            <div className="space-y-4">
+              <SearchableSelect 
+                label="Profilo"
+                value={selectedProfile}
+                options={availableProfiles}
+                onChange={setSelectedProfile}
+                placeholder="Cerca profilo..."
+                displayKey="codice"
+                valueKey="codice"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Barra (mm)</label>
+                  <input 
+                    type="text" 
+                    value={lunghezzaBarra} 
+                    onChange={e => setLunghezzaBarra(e.target.value)} 
+                    readOnly={isBarLocked}
+                    className={`w-full px-4 py-2 border rounded-xl font-mono text-center outline-none transition-all ${isBarLocked ? 'bg-slate-50 text-slate-500 border-slate-100 cursor-not-allowed' : 'bg-white border-red-200 focus:ring-2 focus:ring-red-500'}`} 
+                  />
+                  <button 
+                    onClick={() => setIsBarLocked(!isBarLocked)}
+                    className={`absolute right-2 top-8 p-1 rounded-md transition-all ${isBarLocked ? 'text-slate-400 hover:text-slate-600' : 'text-red-600 bg-red-50'}`}
+                    title={isBarLocked ? "Sblocca per modificare" : "Blocca misura"}
+                  >
+                    {isBarLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
-             </div>
-             
-             {Object.entries(results).map(([code, data]) => (
-                <div key={code} className="space-y-6">
-                   <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl border-l-[12px] border-red-600">
-                      <div>
-                        <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{code}</h4>
-                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest mt-2">{data.descrizione}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-5xl font-black text-white leading-none">{data.barre.length}</div>
-                        <div className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">Barre Totali</div>
-                      </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Taglio (mm)</label>
+                  <input type="text" value={lunghezzaTaglio} onChange={e => setLunghezzaTaglio(e.target.value)} placeholder="0.0" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-black text-center text-red-600 focus:ring-2 focus:ring-red-500 outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Quantità (pz)</label>
+                  <input type="number" value={quantita} onChange={e => setQuantita(parseInt(e.target.value) || 0)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-center" />
+                </div>
+                <div>
+                   <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase block">Angoli</label>
+                      <button onClick={resetAngles} title="Reset 90/90" className="flex items-center gap-1 text-[9px] font-black text-red-500 hover:bg-red-50 px-2 py-0.5 rounded transition-all">
+                        <RotateCcw className="w-3 h-3" /> RESET
+                      </button>
                    </div>
-
-                   {(groupBars ? exportService.getGroupedBars(data.barre) : data.barre.map(b => ({...b, count: 1}))).map((bar, idx) => (
-                      <div key={idx} className="bg-white p-8 sm:p-10 rounded-[3rem] border shadow-2xl space-y-8 group transition-all hover:border-red-100">
-                         <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-6 gap-2">
-                            <span className="text-lg font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-                               <ChevronRight className="w-6 h-6 text-red-600" /> 
-                               {bar.count}x Barre con schema:
-                            </span>
-                            <div className="flex gap-4">
-                               <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-5 py-2 rounded-full border border-slate-200">Somma Tagli: {bar.somma} mm</span>
-                               <span className="text-[10px] font-black text-red-600 uppercase bg-red-50 px-5 py-2 rounded-full border border-red-100">Sfrido: {bar.residuo} mm</span>
-                            </div>
-                         </div>
-                         
-                         <div className="flex flex-wrap gap-4 items-center justify-center sm:justify-start">
-                            {bar.tagli.map((cut, cIdx) => (
-                               <div key={cIdx} className="relative flex flex-col items-center">
-                                  <div className="bg-slate-50 border-2 border-slate-900 w-28 py-8 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden group-hover:bg-white transition-all">
-                                     <div className="absolute top-0 left-0 w-1 h-full bg-slate-900"></div>
-                                     <div className="absolute top-0 right-0 w-1 h-full bg-slate-900"></div>
-                                     <span className="text-lg font-black text-slate-900 z-10">{cut.lung}</span>
-                                     <div className="absolute bottom-1 right-2 text-[8px] font-black text-slate-300">{cut.angoli}</div>
-                                  </div>
-                                  <div className="mt-3 flex items-center gap-1">
-                                     <div className="w-2 h-2 rounded-full bg-red-600"></div>
-                                     <span className="text-[10px] font-black text-slate-400 uppercase">Taglio {cIdx + 1}</span>
-                                  </div>
-                               </div>
-                            ))}
-                            <div className="bg-red-50 border-2 border-dashed border-red-200 w-20 py-8 rounded-2xl flex items-center justify-center opacity-60">
-                               <span className="text-xs font-black text-red-400 uppercase tracking-widest -rotate-90">Sfrido</span>
-                            </div>
-                         </div>
-                         <div className="pt-6 border-t bg-slate-50/50 p-6 rounded-3xl border-dashed">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Distinta Sintetica:</div>
-                            <div className="text-sm font-black text-slate-800 tracking-tight">{bar.riepilogo}</div>
-                         </div>
-                      </div>
-                   ))}
+                   <div className="flex items-center space-x-1">
+                      <input type="text" value={angoloSx} onChange={e=>setAngoloSx(e.target.value)} className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-xs" />
+                      <span className="text-slate-300 font-black">/</span>
+                      <input type="text" value={angoloDx} onChange={e=>setAngoloDx(e.target.value)} className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-xs" />
+                   </div>
                 </div>
-             ))}
-          </div>
-        )}
+              </div>
+              <button onClick={handleAddCut} className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-3 mt-4">
+                <Plus className="w-5 h-5" />
+                <span>INSERISCI IN DISTINTA</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="bg-slate-900 p-6 rounded-3xl text-white shadow-xl">
+             <h3 className="text-xs font-black mb-4 flex items-center space-x-2 uppercase tracking-widest text-slate-400"><Settings className="w-4 h-4" /><span>Setup Tecnico</span></h3>
+             <div className="space-y-4">
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Lama (mm)</label>
+                      <input type="number" value={lama} onChange={e=>setLama(parseFloat(e.target.value))} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl outline-none text-xs" />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-5">
+                      <label className="flex items-center cursor-pointer">
+                        <input type="checkbox" checked={groupBars} onChange={e=>setGroupBars(e.target.checked)} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-slate-700 rounded-full peer-checked:bg-red-600 relative transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                        <span className="ml-2 text-[9px] font-bold uppercase text-slate-400">Raggruppa</span>
+                      </label>
+                  </div>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Scarto In. (mm)</label>
+                      <input type="number" value={scartoIniziale} onChange={e=>setScartoIniziale(parseFloat(e.target.value))} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl outline-none text-xs" />
+                  </div>
+                  <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Scarto Fin. (mm)</label>
+                      <input type="number" value={scartoFinale} onChange={e=>setScartoFinale(parseFloat(e.target.value))} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl outline-none text-xs" />
+                  </div>
+               </div>
+             </div>
+          </section>
+        </div>
+
+        <div className="lg:col-span-2 space-y-6">
+          <section className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[400px]">
+            <div className="p-5 border-b flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center space-x-4">
+                 <h3 className="font-black text-slate-800 uppercase text-xs tracking-tight">Distinta Attuale</h3>
+                 <button onClick={saveCommessaToDb} className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase hover:bg-blue-50 px-3 py-1 rounded-full border border-blue-100 transition-all"><Save className="w-3 h-3" /> Archivia</button>
+              </div>
+              <button onClick={() => {setDistinta([]); setResults(null);}} className="text-[10px] font-black text-slate-400 hover:text-red-600 uppercase tracking-widest transition-colors">Svuota</button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-white border-b z-10 shadow-sm">
+                  <tr>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase">Profilo</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase">L. Taglio</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase">Pezzi</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase text-center">X</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {distinta.length === 0 ? (
+                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic">Inserisci i tagli per iniziare.</td></tr>
+                  ) : (
+                    distinta.map((cut) => (
+                      <tr key={cut.id} className="hover:bg-slate-50/80 font-bold">
+                        <td className="px-6 py-4 text-slate-900">{cut.codice}</td>
+                        <td className="px-6 py-4 font-mono text-red-600">{cut.lung} mm <span className="text-[9px] text-slate-400">({cut.angoli})</span></td>
+                        <td className="px-6 py-4">{cut.qty}</td>
+                        <td className="px-6 py-4 text-center"><button onClick={() => removeCut(cut.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-5 bg-slate-50 border-t">
+              <button onClick={runOptimization} disabled={distinta.length === 0 || isOptimizing} className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center space-x-3 shadow-2xl">
+                {isOptimizing ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <Play className="w-5 h-5 fill-white" />}
+                <span>CALCOLA OTTIMIZZAZIONE</span>
+              </button>
+            </div>
+          </section>
+
+          {results && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><Boxes className="w-6 h-6 text-red-600" />RISULTATI</h3>
+                  <div className="flex gap-2">
+                    <button onClick={() => exportService.toCsv(results, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-slate-800 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4 text-green-600" /><span>CSV</span></button>
+                    <button onClick={() => exportService.toPdf(results, cliente, commessa, groupBars)} className="flex items-center justify-center space-x-2 bg-white border-2 border-slate-200 hover:border-red-500 px-5 py-2.5 rounded-xl text-xs font-black text-slate-700 shadow-sm transition-all"><Download className="w-4 h-4 text-red-600" /><span>STAMPA PDF</span></button>
+                  </div>
+               </div>
+               {(Object.entries(results) as [string, any][]).map(([code, data]) => {
+                 const barreDaMostrare = groupBars ? getGroupedBars(data.barre) : data.barre.map(b => ({...b, count: 1}));
+                 const pezziSummary = getPezziSummary(data.barre);
+                 return (
+                   <div key={code} className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl flex items-center space-x-5 border border-slate-800">
+                           <div className="bg-red-600/20 p-4 rounded-2xl border border-red-600/30"><Warehouse className="w-8 h-8 text-red-500" /></div>
+                           <div>
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Prelievo Magazzino</div>
+                              <div className="text-2xl font-black">{data.barre.length} <span className="text-sm font-bold text-slate-400">Barre</span></div>
+                              <div className="text-[10px] font-bold text-red-400 mt-1 uppercase">Profilo: {code}</div>
+                           </div>
+                        </div>
+                        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl flex items-center space-x-5">
+                           <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200"><Hash className="w-8 h-8 text-slate-400" /></div>
+                           <div>
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Conteggio Pezzi</div>
+                              <div className="text-2xl font-black">{pezziSummary.reduce((s, p) => s + p.qty, 0)} <span className="text-sm font-bold text-slate-400">Pezzi</span></div>
+                              <div className="text-[10px] font-bold text-green-600 mt-1 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Pronto per officina</div>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+                        <div className="px-6 py-4 bg-slate-50 border-b flex items-center gap-2"><Ruler className="w-4 h-4 text-red-600" /><h5 className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Riepilogo Tagli Univoci</h5></div>
+                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                           {pezziSummary.map((p, pIdx) => (
+                              <div key={pIdx} className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                                 <div className="text-red-600 font-black text-lg leading-none mb-1">{p.qty}x</div>
+                                 <div className="text-slate-800 font-black text-xs">{p.lung} mm</div>
+                                 <div className="text-[9px] font-bold text-slate-400 uppercase">{p.angoli}</div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden">
+                       <div className="p-6 bg-slate-900 text-white flex justify-between items-center"><div className="space-y-1"><h4 className="font-black text-2xl tracking-tighter text-red-500">{code}</h4><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{data.descrizione}</p></div></div>
+                       <div className="p-8 space-y-10">
+                         {barreDaMostrare.map((bar, idx) => (
+                           <div key={idx} className="space-y-4 group">
+                             <div className="flex items-end justify-between border-b border-slate-100 pb-2"><span className="text-sm font-black text-slate-800 uppercase">{bar.count > 1 ? `${bar.count}x BARRE IDENTICHE` : `BARRA ${idx + 1}`}</span><div className="text-[10px] font-bold text-slate-400 space-x-3 italic"><span>Taglio: <b className="text-slate-700">{bar.somma} mm</b></span><span>Scarto: <b className="text-red-500">{bar.residuo} mm</b></span></div></div>
+                             <div className="h-10 w-full bg-slate-100 rounded-xl overflow-hidden flex border-2 border-slate-200/50 shadow-inner">{bar.tagli.map((t, tIdx) => (<div key={tIdx} className="h-full border-r-2 border-white/40 flex items-center justify-center text-[10px] text-white font-black overflow-hidden" style={{ width: `${(t.lung / (bar.somma + bar.residuo)) * 100}%`, backgroundColor: `hsl(${350 - (tIdx * 15)}, 80%, 55%)` }}><span className="truncate px-1">{t.lung}</span></div>))}<div className="h-full bg-slate-300/20 flex items-center justify-center text-[9px] text-slate-400 font-black italic" style={{ width: `${(bar.residuo / (bar.somma + bar.residuo)) * 100}%` }}>RES.</div></div>
+                             <div className="flex flex-wrap gap-2 text-[11px] font-bold text-slate-600 bg-slate-50 p-4 rounded-2xl border border-slate-100"><span className="text-red-600 font-black flex items-center gap-1 uppercase tracking-tighter"><ChevronRight className="w-3 h-3" /> SCHEMA:</span>{bar.riepilogo}</div>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

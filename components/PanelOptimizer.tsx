@@ -125,10 +125,8 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const loadData = () => {
     const pRaw = localStorage.getItem('alea_panel_materials') || '[]';
     const cRaw = localStorage.getItem('alea_clients') || '[]';
-
     const pParsed = JSON.parse(pRaw) as PanelMaterial[];
     const cParsed = JSON.parse(cRaw) as Client[];
-
     setAvailablePanels(pParsed.sort((a, b) => a.codice.localeCompare(b.codice)));
     setAvailableClients(cParsed.sort((a, b) => a.nome.localeCompare(b.nome)));
   };
@@ -153,7 +151,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
       setLarghezzaLastra(p.lungDefault.toString()); 
       setAltezzaLastra(p.altDefault.toString());
       setRotazione(p.giraPezzoDefault);
-      setIsSheetLocked(true); // Auto-lock su cambio selezione
+      setIsSheetLocked(true);
     } else {
       setSelectedPanelId('');
       setCodicePannello('');
@@ -172,17 +170,16 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     const pw = parseFloat(lunghezza.replace(',', '.'));
     const ph = parseFloat(altezza.replace(',', '.'));
 
-    // Validazione dimensionale rigorosa
     if (!rotazione) {
       if (pw > sw || ph > sh) {
-        alert(`ERRORE DIMENSIONI: Il pezzo (${pw}x${ph}) supera la dimensione della lastra (${sw}x${sh}) e non è ruotabile.`);
+        alert(`ERRORE: Pezzo (${pw}x${ph}) troppo grande per lastra (${sw}x${sh}) senza rotazione.`);
         return;
       }
     } else {
       const fitsNormal = pw <= sw && ph <= sh;
       const fitsRotated = ph <= sw && pw <= sh;
       if (!fitsNormal && !fitsRotated) {
-        alert(`ERRORE DIMENSIONI: Il pezzo (${pw}x${ph}) supera le dimensioni massime della lastra (${sw}x${sh}) in entrambi i sensi.`);
+        alert(`ERRORE: Pezzo (${pw}x${ph}) non entra in lastra (${sw}x${sh}).`);
         return;
       }
     }
@@ -221,7 +218,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     localStorage.setItem('alea_commesse', JSON.stringify(aggiornate));
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
     if (supabaseService.isInitialized()) await supabaseService.syncTable('commesse', aggiornate);
-    alert("Archiviato con successo!");
+    alert("Archiviato!");
   };
 
   const drawCanvas = (id: string, sheet: any, sheetW: number, sheetH: number) => {
@@ -235,26 +232,13 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     ctx.strokeRect(0, 0, sheetW * scale, sheetH * scale);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sheetW * scale, sheetH * scale);
     
-    const legendMap = new Map<string, number>();
-    let nextIdx = 1;
-
     sheet.panels.forEach((p: any) => {
         ctx.fillStyle = '#f8fafc'; ctx.fillRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
         ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.strokeRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
-        
         const label = `${p.w}x${p.h}`;
         const fits = (p.w * scale > 45) && (p.h * scale > 20);
-
-        let textToDraw = label;
-        if (!fits) {
-          if (!legendMap.has(label)) legendMap.set(label, nextIdx++);
-          textToDraw = String(legendMap.get(label));
-        }
-
-        ctx.fillStyle = 'black'; 
-        ctx.font = fits ? 'bold 10px Inter' : 'bold 16px Inter'; 
-        ctx.textAlign = 'center';
-        ctx.fillText(textToDraw, p.x * scale + (p.w * scale / 2), p.y * scale + (p.h * scale / 2) + 5);
+        ctx.fillStyle = 'black'; ctx.font = fits ? 'bold 10px Inter' : 'bold 16px Inter'; ctx.textAlign = 'center';
+        ctx.fillText(label, p.x * scale + (p.w * scale / 2), p.y * scale + (p.h * scale / 2) + 5);
     });
   };
 
@@ -295,6 +279,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
               <button 
                 onClick={() => setIsSheetLocked(!isSheetLocked)}
                 className={`p-2 rounded-xl transition-all ${isSheetLocked ? 'text-slate-400 hover:text-slate-600' : 'text-red-600 bg-red-50'}`}
+                title={isSheetLocked ? "Sblocca per modificare" : "Blocca misure"}
               >
                 {isSheetLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
@@ -308,7 +293,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                   value={larghezzaLastra} 
                   onChange={e=>setLarghezzaLastra(e.target.value)} 
                   readOnly={isSheetLocked}
-                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'focus:ring-2 focus:ring-red-500 border-slate-200'}`} 
+                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'bg-white focus:ring-2 focus:ring-red-500 border-red-200'}`} 
                  />
               </div>
               <div className="space-y-1">
@@ -318,7 +303,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                   value={altezzaLastra} 
                   onChange={e=>setAltezzaLastra(e.target.value)} 
                   readOnly={isSheetLocked}
-                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'focus:ring-2 focus:ring-red-500 border-slate-200'}`} 
+                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'bg-white focus:ring-2 focus:ring-red-500 border-red-200'}`} 
                  />
               </div>
            </div>
@@ -418,7 +403,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                            </div>
                            <div className="flex flex-col items-center gap-8 bg-slate-50 p-4 sm:p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 shadow-inner">
                               <canvas ref={el => canvasRefs.current[`${key}-${sIdx}`] = el} width={800} height={500} className="max-w-full rounded-2xl shadow-2xl bg-white border-2 border-slate-900" />
-                              
                               <div className="w-full bg-white p-6 rounded-2xl border shadow-sm">
                                 <h5 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Pezzi in questo foglio:</h5>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
