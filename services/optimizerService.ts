@@ -76,9 +76,10 @@ export const optimizerService = {
     return results;
   },
 
-  optimizePanels: (requests: PanelCutRequest[], sheetW: number, sheetH: number, gap: number = 5): PanelOptimizationResult => {
+  optimizePanels: (requests: PanelCutRequest[], sheetW: number, sheetH: number, gap: number = 2): PanelOptimizationResult => {
     const results: PanelOptimizationResult = {};
 
+    // Raggruppamento per materiale
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
       const key = `${r.codice || 'LIBERO'}___${r.materiale}`;
@@ -91,14 +92,34 @@ export const optimizerService = {
       const material = group[0].materiale;
       const codice = group[0].codice;
       
+      // Esplosione pezzi singoli con orientamento ottimale per strisce verticali
       let panelsToPlace: any[] = [];
       group.forEach(r => {
         for (let i = 0; i < r.quantita; i++) {
-          panelsToPlace.push({ w: r.lunghezza, h: r.altezza, rot: r.rotazione, material: r.materiale, id: Math.random() });
+          let w = r.lunghezza;
+          let h = r.altezza;
+          
+          // Se ruotabile, preferiamo mettere il lato CORTO come larghezza (W)
+          // per creare strisce verticali più strette possibili
+          if (r.rotazione) {
+            const minDim = Math.min(r.lunghezza, r.altezza);
+            const maxDim = Math.max(r.lunghezza, r.altezza);
+            // Verifica che il lato lungo stia nell'altezza della lastra
+            if (maxDim <= sheetH) {
+              w = minDim;
+              h = maxDim;
+            } else {
+              // Se il lato lungo non sta in altezza, dobbiamo per forza metterlo in larghezza
+              w = maxDim;
+              h = minDim;
+            }
+          }
+          panelsToPlace.push({ w, h, rot: r.rotazione, material: r.materiale, origW: r.lunghezza, origH: r.altezza });
         }
       });
 
-      panelsToPlace.sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
+      // Ordiniamo per larghezza decrescente per definire le strisce principali
+      panelsToPlace.sort((a, b) => b.w - a.w || b.h - a.h);
 
       const sheets: OptimizedSheet[] = [];
 
@@ -106,65 +127,64 @@ export const optimizerService = {
         let placedPanels: PlacedPanel[] = [];
         let currentX = 0;
 
-        while (true) {
-          const remW = sheetW - currentX;
-          let candidates = panelsToPlace.map((p, idx) => {
-            let effW = null, useRot = false;
-            if (p.rot) {
-              const minDim = Math.min(p.w, p.h);
-              const maxDim = Math.max(p.w, p.h);
-              if (minDim <= remW) { effW = minDim; useRot = p.w !== minDim; } 
-              else if (maxDim <= remW) { effW = maxDim; useRot = p.w !== maxDim; }
-            } else {
-              if (p.w <= remW) effW = p.w;
-            }
-            return { idx, p, effW, useRot };
-          }).filter(c => c.effW !== null);
+        // Finché c'è spazio in larghezza nella lastra
+        while (currentX < sheetW) {
+          // Troviamo il primo pezzo che entra nello spazio rimanente in larghezza
+          const headIdx = panelsToPlace.findIndex(p => p.w <= (sheetW - currentX));
+          if (headIdx === -1) break;
 
-          if (candidates.length === 0) break;
-          candidates.sort((a, b) => (b.effW || 0) - (a.effW || 0));
-          const chosen = candidates[0];
-          const colWidth = chosen.effW || 0;
+          const head = panelsToPlace[headIdx];
+          const stripWidth = head.w; // Questa striscia sarà larga quanto il pezzo più largo scelto
+          panelsToPlace.splice(headIdx, 1);
 
           let currentY = 0;
+          // Posizioniamo il pezzo "testa" della colonna
+          placedPanels.push({ 
+            material: head.material, 
+            x: currentX, 
+            y: currentY, 
+            w: head.w, 
+            h: head.h, 
+            rotated: head.w !== head.origW 
+          });
+          currentY += head.h + gap;
+
+          // Proviamo a riempire il resto della colonna (altezza rimanente)
           for (let i = 0; i < panelsToPlace.length; ) {
             const p = panelsToPlace[i];
-            let placed = false;
-
-            if (p.rot) {
-              const fitsA = p.w <= colWidth && p.h <= sheetH - currentY;
-              const fitsB = p.h <= colWidth && p.w <= sheetH - currentY;
-              if (fitsA && fitsB) {
-                if (p.w >= p.h) {
-                  placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-                  currentY += p.h + gap;
-                } else {
-                  placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
-                  currentY += p.w + gap;
-                }
-                panelsToPlace.splice(i, 1); placed = true;
-              } else if (fitsA) {
-                placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-                currentY += p.h + gap; panelsToPlace.splice(i, 1); placed = true;
-              } else if (fitsB) {
-                placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
-                currentY += p.w + gap; panelsToPlace.splice(i, 1); placed = true;
-              }
-            } else if (p.w <= colWidth && p.h <= sheetH - currentY) {
-              placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-              currentY += p.h + gap; panelsToPlace.splice(i, 1); placed = true;
+            const canFitNormally = p.w <= stripWidth && p.h <= (sheetH - currentY);
+            
+            // Se non entra normalmente ma è ruotabile, proviamo a girarlo per farlo stare nella colonna
+            let canFitRotated = false;
+            if (!canFitNormally && p.rot) {
+              canFitRotated = p.h <= stripWidth && p.w <= (sheetH - currentY);
             }
 
-            if (!placed) i++;
-            if (currentY > sheetH - 1) break;
+            if (canFitNormally) {
+              placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: p.w !== p.origW });
+              currentY += p.h + gap;
+              panelsToPlace.splice(i, 1);
+            } else if (canFitRotated) {
+              placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.h, h: p.w, rotated: p.h !== p.origW });
+              currentY += p.w + gap;
+              panelsToPlace.splice(i, 1);
+            } else {
+              i++;
+            }
+            if (currentY >= sheetH) break;
           }
-          currentX += colWidth + gap;
-          if (currentX > sheetW - 1) break;
+
+          currentX += stripWidth + gap;
         }
-        if (placedPanels.length === 0) break;
+
         const areaUsata = placedPanels.reduce((s, p) => s + (p.w * p.h), 0);
-        sheets.push({ panels: placedPanels, areaUsata, residuo: (sheetW * sheetH) - areaUsata });
+        sheets.push({ 
+          panels: placedPanels, 
+          areaUsata, 
+          residuo: (sheetW * sheetH) - areaUsata 
+        });
       }
+      
       results[key] = { codice, material, sheets };
     }
     return results;
