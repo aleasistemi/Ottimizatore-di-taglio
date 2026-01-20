@@ -81,7 +81,7 @@ export const optimizerService = {
 
     const groupedRequests: Record<string, PanelCutRequest[]> = {};
     requests.forEach(r => {
-      const key = `${r.codice || 'LIBERO'}___${r.materiale}___${r.colore}`;
+      const key = `${r.codice || 'LIBERO'}___${r.materiale}`;
       if (!groupedRequests[key]) groupedRequests[key] = [];
       groupedRequests[key].push(r);
     });
@@ -89,13 +89,12 @@ export const optimizerService = {
     for (const key in groupedRequests) {
       const group = groupedRequests[key];
       const material = group[0].materiale;
-      const colore = group[0].colore;
       const codice = group[0].codice;
       
       let panelsToPlace: any[] = [];
       group.forEach(r => {
         for (let i = 0; i < r.quantita; i++) {
-          panelsToPlace.push({ w: r.lunghezza, h: r.altezza, rot: r.rotazione, colore: r.colore, material: r.materiale, id: Math.random() });
+          panelsToPlace.push({ w: r.lunghezza, h: r.altezza, rot: r.rotazione, material: r.materiale, id: Math.random() });
         }
       });
 
@@ -114,13 +113,8 @@ export const optimizerService = {
             if (p.rot) {
               const minDim = Math.min(p.w, p.h);
               const maxDim = Math.max(p.w, p.h);
-              if (minDim <= remW) {
-                effW = minDim;
-                useRot = p.w !== minDim;
-              } else if (maxDim <= remW) {
-                effW = maxDim;
-                useRot = p.w !== maxDim;
-              }
+              if (minDim <= remW) { effW = minDim; useRot = p.w !== minDim; } 
+              else if (maxDim <= remW) { effW = maxDim; useRot = p.w !== maxDim; }
             } else {
               if (p.w <= remW) effW = p.w;
             }
@@ -128,7 +122,6 @@ export const optimizerService = {
           }).filter(c => c.effW !== null);
 
           if (candidates.length === 0) break;
-
           candidates.sort((a, b) => (b.effW || 0) - (a.effW || 0));
           const chosen = candidates[0];
           const colWidth = chosen.effW || 0;
@@ -141,58 +134,39 @@ export const optimizerService = {
             if (p.rot) {
               const fitsA = p.w <= colWidth && p.h <= sheetH - currentY;
               const fitsB = p.h <= colWidth && p.w <= sheetH - currentY;
-
               if (fitsA && fitsB) {
                 if (p.w >= p.h) {
-                  placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+                  placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
                   currentY += p.h + gap;
                 } else {
-                  placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+                  placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
                   currentY += p.w + gap;
                 }
-                panelsToPlace.splice(i, 1);
-                placed = true;
+                panelsToPlace.splice(i, 1); placed = true;
               } else if (fitsA) {
-                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-                currentY += p.h + gap;
-                panelsToPlace.splice(i, 1);
-                placed = true;
+                placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+                currentY += p.h + gap; panelsToPlace.splice(i, 1); placed = true;
               } else if (fitsB) {
-                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
-                currentY += p.w + gap;
-                panelsToPlace.splice(i, 1);
-                placed = true;
+                placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.h, h: p.w, rotated: true });
+                currentY += p.w + gap; panelsToPlace.splice(i, 1); placed = true;
               }
-            } else {
-              if (p.w <= colWidth && p.h <= sheetH - currentY) {
-                placedPanels.push({ material: p.material, colore: p.colore, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
-                currentY += p.h + gap;
-                panelsToPlace.splice(i, 1);
-                placed = true;
-              }
+            } else if (p.w <= colWidth && p.h <= sheetH - currentY) {
+              placedPanels.push({ material: p.material, x: currentX, y: currentY, w: p.w, h: p.h, rotated: false });
+              currentY += p.h + gap; panelsToPlace.splice(i, 1); placed = true;
             }
 
             if (!placed) i++;
             if (currentY > sheetH - 1) break;
           }
-
           currentX += colWidth + gap;
           if (currentX > sheetW - 1) break;
         }
-
         if (placedPanels.length === 0) break;
-
         const areaUsata = placedPanels.reduce((s, p) => s + (p.w * p.h), 0);
-        sheets.push({
-          panels: placedPanels,
-          areaUsata,
-          residuo: (sheetW * sheetH) - areaUsata
-        });
+        sheets.push({ panels: placedPanels, areaUsata, residuo: (sheetW * sheetH) - areaUsata });
       }
-
-      results[key] = { codice, material, colore, sheets };
+      results[key] = { codice, material, sheets };
     }
-
     return results;
   }
 };
