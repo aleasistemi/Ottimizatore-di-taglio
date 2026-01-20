@@ -70,7 +70,6 @@ export interface PanelCutRequest {
   id: string;
   codice?: string;
   materiale: string;
-  colore: string;
   lunghezza: number;
   altezza: number;
   quantita: number;
@@ -79,7 +78,6 @@ export interface PanelCutRequest {
 
 export interface PlacedPanel {
   material: string;
-  colore?: string;
   x: number;
   y: number;
   w: number;
@@ -97,7 +95,6 @@ export interface PanelOptimizationResult {
   [key: string]: {
     codice?: string;
     material: string;
-    colore?: string;
     sheets: OptimizedSheet[];
   };
 }
