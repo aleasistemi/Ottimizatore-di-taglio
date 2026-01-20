@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler, Search, ChevronDown } from 'lucide-react';
-import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client, AleaColor } from '../types';
+import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler, Search, ChevronDown, AlertCircle } from 'lucide-react';
+import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
 import { supabaseService } from '../services/supabaseService';
@@ -107,7 +107,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const [selectedPanelId, setSelectedPanelId] = useState('');
   const [codicePannello, setCodicePannello] = useState('');
   const [materiale, setMateriale] = useState('');
-  const [coloreLastra, setColoreLastra] = useState('Trasparente');
   const [larghezzaLastra, setLarghezzaLastra] = useState('3050');
   const [altezzaLastra, setAltezzaLastra] = useState('2050');
   const [lunghezza, setLunghezza] = useState('');
@@ -117,7 +116,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
 
   const [availablePanels, setAvailablePanels] = useState<PanelMaterial[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
-  const [availableColors, setAvailableColors] = useState<AleaColor[]>([]);
   const [distinta, setDistinta] = useState<PanelCutRequest[]>([]);
   const [results, setResults] = useState<PanelOptimizationResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -126,15 +124,12 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const loadData = () => {
     const pRaw = localStorage.getItem('alea_panel_materials') || '[]';
     const cRaw = localStorage.getItem('alea_clients') || '[]';
-    const clRaw = localStorage.getItem('alea_colors') || '[]';
 
     const pParsed = JSON.parse(pRaw) as PanelMaterial[];
     const cParsed = JSON.parse(cRaw) as Client[];
-    const clParsed = JSON.parse(clRaw) as AleaColor[];
 
     setAvailablePanels(pParsed.sort((a, b) => a.codice.localeCompare(b.codice)));
     setAvailableClients(cParsed.sort((a, b) => a.nome.localeCompare(b.nome)));
-    setAvailableColors(clParsed.sort((a, b) => a.nome.localeCompare(b.nome)));
   };
 
   useEffect(() => {
@@ -169,13 +164,33 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
       alert("Specifica materiale e misure!");
       return;
     }
+
+    const sw = parseFloat(larghezzaLastra);
+    const sh = parseFloat(altezzaLastra);
+    const pw = parseFloat(lunghezza.replace(',', '.'));
+    const ph = parseFloat(altezza.replace(',', '.'));
+
+    // Validazione dimensionale rigorosa
+    if (!rotazione) {
+      if (pw > sw || ph > sh) {
+        alert(`ERRORE DIMENSIONI: Il pezzo (${pw}x${ph}) supera la dimensione della lastra (${sw}x${sh}) e non è ruotabile.`);
+        return;
+      }
+    } else {
+      const fitsNormal = pw <= sw && ph <= sh;
+      const fitsRotated = ph <= sw && pw <= sh;
+      if (!fitsNormal && !fitsRotated) {
+        alert(`ERRORE DIMENSIONI: Il pezzo (${pw}x${ph}) supera le dimensioni massime della lastra (${sw}x${sh}) in entrambi i sensi.`);
+        return;
+      }
+    }
+
     const newCut: PanelCutRequest = {
       id: Math.random().toString(36).substr(2, 9),
       codice: codicePannello,
       materiale,
-      colore: coloreLastra || 'Standard',
-      lunghezza: parseFloat(lunghezza.replace(',', '.')),
-      altezza: parseFloat(altezza.replace(',', '.')),
+      lunghezza: pw,
+      altezza: ph,
       quantita,
       rotazione
     };
@@ -263,6 +278,15 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     return Array.from(legendMap.entries()).sort((a,b) => a[1]-b[1]);
   };
 
+  const getSheetSummary = (sheet: any) => {
+    const summary: Record<string, number> = {};
+    sheet.panels.forEach((p: any) => {
+      const key = `${p.w}x${p.h}`;
+      summary[key] = (summary[key] || 0) + 1;
+    });
+    return Object.entries(summary).sort((a,b) => b[1] - a[1]);
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 pb-10">
       <div className="space-y-6">
@@ -287,13 +311,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Altezza (mm)</label>
                  <input type="number" value={altezzaLastra} onChange={e=>setAltezzaLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black" />
               </div>
-           </div>
-           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Colore Pannello</label>
-             <select value={coloreLastra} onChange={e=>setColoreLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-red-500 bg-slate-50">
-                <option value="Trasparente">Trasparente</option>
-                {availableColors.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-             </select>
            </div>
            <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Nome Materiale (per distinta)</label>
@@ -338,13 +355,13 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
           </div>
           <div className="flex-1 overflow-y-auto">
              <table className="w-full text-left text-xs">
-                <thead><tr className="border-b font-black text-slate-400 uppercase tracking-widest bg-slate-50/20"><th className="p-5">Materiale / Colore</th><th className="p-5">Misure (mm)</th><th className="p-5 text-center">Qtà</th><th className="p-5 text-center">X</th></tr></thead>
+                <thead><tr className="border-b font-black text-slate-400 uppercase tracking-widest bg-slate-50/20"><th className="p-5">Materiale</th><th className="p-5">Misure (mm)</th><th className="p-5 text-center">Qtà</th><th className="p-5 text-center">X</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {distinta.map(c=>(
                     <tr key={c.id} className="font-bold hover:bg-slate-50 transition-all">
                        <td className="p-5">
                           <div className="text-slate-900 uppercase font-black">{c.materiale}</div>
-                          <div className="text-[10px] text-red-600 font-black uppercase tracking-widest mt-0.5">{c.colore} {c.codice ? `(${c.codice})` : ''}</div>
+                          {c.codice && <div className="text-[10px] text-red-600 font-black uppercase tracking-widest mt-0.5">{c.codice}</div>}
                        </td>
                        <td className="p-5 text-slate-900 font-black text-sm">{c.lunghezza} x {c.altezza}</td>
                        <td className="p-5 text-center bg-slate-50/50"><span className="text-red-600 font-black text-sm">{c.quantita}</span> pz</td>
@@ -372,7 +389,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                       <div className="space-y-1">
                         <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{group.codice || 'LIBERO'}</h4>
                         <p className="text-xs font-black text-slate-300 uppercase tracking-widest">{group.material}</p>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{group.colore}</p>
                       </div>
                       <div className="text-right">
                         <div className="text-5xl font-black text-white leading-none">{group.sheets.length}</div>
@@ -381,7 +397,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                    </div>
 
                    {group.sheets.map((sheet: any, sIdx: number) => {
-                      const legend = getSheetLegend(sheet, parseFloat(larghezzaLastra), parseFloat(altezzaLastra));
+                      const summary = getSheetSummary(sheet);
                       return (
                         <div key={sIdx} className="bg-white p-8 sm:p-10 rounded-[3rem] border shadow-2xl space-y-8">
                            <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-6 gap-2">
@@ -393,19 +409,17 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                            <div className="flex flex-col items-center gap-8 bg-slate-50 p-4 sm:p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 shadow-inner">
                               <canvas ref={el => canvasRefs.current[`${key}-${sIdx}`] = el} width={800} height={500} className="max-w-full rounded-2xl shadow-2xl bg-white border-2 border-slate-900" />
                               
-                              {legend.length > 0 && (
-                                <div className="w-full bg-white p-6 rounded-2xl border shadow-sm">
-                                  <h5 className="text-[10px] font-black text-red-600 uppercase mb-4 tracking-widest">Legenda Pezzi Piccoli:</h5>
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                    {legend.map(([dim, idx]) => (
-                                      <div key={idx} className="flex items-center gap-2">
-                                        <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-[10px] font-black">{idx}</span>
-                                        <span className="text-xs font-bold text-slate-600">{dim} mm</span>
-                                      </div>
-                                    ))}
-                                  </div>
+                              <div className="w-full bg-white p-6 rounded-2xl border shadow-sm">
+                                <h5 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Pezzi in questo foglio:</h5>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                  {summary.map(([dim, q]) => (
+                                    <div key={dim} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border">
+                                      <span className="text-xs font-black text-red-600">{q}x</span>
+                                      <span className="text-[11px] font-bold text-slate-700">{dim} mm</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
+                              </div>
                            </div>
                         </div>
                       );

@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Palette, Copy, Users, FileSpreadsheet, Upload, CheckCircle2, PlayCircle, ExternalLink, Filter, CheckSquare, Square as SquareIcon } from 'lucide-react';
-import { Profile, Client, CommessaArchiviata, PanelMaterial, AleaColor } from '../types';
+import { Database, Plus, Search, Trash2, Edit3, X, Square, Settings, Calendar, Save, Code, Copy, Users, FileSpreadsheet, PlayCircle, ExternalLink, CheckCircle2, CheckSquare, Square as SquareIcon } from 'lucide-react';
+import { Profile, Client, CommessaArchiviata, PanelMaterial } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 
-type DbTab = 'profili' | 'pannelli' | 'colori' | 'clienti' | 'commesse' | 'settings';
+type DbTab = 'profili' | 'pannelli' | 'clienti' | 'commesse' | 'settings';
 
 interface ProfileDatabaseProps {
   onOpenCommessa?: (commessa: CommessaArchiviata) => void;
@@ -19,32 +19,25 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   const [isAdding, setIsAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Stati per il database
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [panelMaterials, setPanelMaterials] = useState<PanelMaterial[]>([]);
   const [commesse, setCommesse] = useState<CommessaArchiviata[]>([]);
-  const [colors, setColors] = useState<AleaColor[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
 
-  // Stati per Archivio Commesse (Filtri e Selezione)
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedCommessaIds, setSelectedCommessaIds] = useState<string[]>([]);
 
-  // Stati per il Setup Cloud
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('alea_sb_url') || '');
   const [sbKey, setSbKey] = useState(localStorage.getItem('alea_sb_key') || '');
 
-  // Form stati
   const [profileForm, setProfileForm] = useState<Profile>({ codice: '', descr: '', lungMax: 6000 });
   const [panelForm, setPanelForm] = useState<PanelMaterial>({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
-  const [colorForm, setColorForm] = useState<AleaColor>({ id: '', nome: '' });
   const [clientForm, setClientForm] = useState<Client>({ id: '', nome: '', note: '', dataAggiunta: '' });
 
   const loadLocalData = () => {
     setProfiles(JSON.parse(localStorage.getItem('alea_profiles') || '[]'));
     setPanelMaterials(JSON.parse(localStorage.getItem('alea_panel_materials') || '[]'));
     setCommesse(JSON.parse(localStorage.getItem('alea_commesse') || '[]'));
-    setColors(JSON.parse(localStorage.getItem('alea_colors') || '[]'));
     setClients(JSON.parse(localStorage.getItem('alea_clients') || '[]'));
   };
 
@@ -82,8 +75,8 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   }, [commesse, selectedYear, searchTerm]);
 
   const saveToDb = async (type: DbTab, data: any[]) => {
-    const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', commesse: 'alea_commesse', colori: 'alea_colors', clienti: 'alea_clients' };
-    const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', commesse: 'commesse', colori: 'colors', clienti: 'clients' };
+    const keys: Record<string, string> = { profili: 'alea_profiles', pannelli: 'alea_panel_materials', commesse: 'alea_commesse', clienti: 'alea_clients' };
+    const tables: Record<string, string> = { profili: 'profiles', pannelli: 'panel_materials', commesse: 'commesse', clienti: 'clients' };
     
     window.dispatchEvent(new CustomEvent('alea_local_mutation'));
     localStorage.setItem(keys[type], JSON.stringify(data));
@@ -109,14 +102,6 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     setIsAdding(false); setPanelForm({ id: '', codice: '', descr: '', materiale: 'Lexan 3mm', lungDefault: 3050, altDefault: 2050, giraPezzoDefault: true });
   };
 
-  const handleSaveColor = async () => {
-    if (!colorForm.nome) return;
-    const id = colorForm.id || `COL_${Date.now()}`;
-    const updated = [{ ...colorForm, id }, ...colors.filter(c => c.id !== id)];
-    await saveToDb('colori', updated);
-    setIsAdding(false); setColorForm({ id: '', nome: '' });
-  };
-
   const handleSaveClient = async () => {
     if (!clientForm.nome) return;
     const id = clientForm.id || `CLI_${Date.now()}`;
@@ -131,12 +116,11 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
     let newData = [];
     if (type === 'profili') newData = profiles.filter(p => p.codice !== id);
     if (type === 'pannelli') newData = panelMaterials.filter(p => p.id !== id);
-    if (type === 'colori') newData = colors.filter(c => c.id !== id);
     if (type === 'clienti') newData = clients.filter(c => c.id !== id);
     if (type === 'commesse') newData = commesse.filter(c => c.id !== id);
     
-    const idCols: any = { profili: 'codice', pannelli: 'id', colori: 'id', clienti: 'id', commesse: 'id' };
-    const tables: any = { profili: 'profiles', pannelli: 'panel_materials', colori: 'colors', clienti: 'clients', commesse: 'commesse' };
+    const idCols: any = { profili: 'codice', pannelli: 'id', clienti: 'id', commesse: 'id' };
+    const tables: any = { profili: 'profiles', pannelli: 'panel_materials', clienti: 'clients', commesse: 'commesse' };
     
     if (supabaseService.isInitialized()) await supabaseService.deleteFromTable(tables[type], id, idCols[type]);
     await saveToDb(type, newData);
@@ -196,7 +180,7 @@ export const ProfileDatabase: React.FC<ProfileDatabaseProps> = ({ onOpenCommessa
   };
 
   const sqlSetupScript = `
--- ESEGUI QUESTO SCRIPT PER CONFIGURARE UN NUOVO DATABASE SUPABASE
+-- SETUP DATABASE ALEA SISTEMI
 CREATE TABLE IF NOT EXISTS profiles (
   codice TEXT PRIMARY KEY,
   descr TEXT,
@@ -210,10 +194,6 @@ CREATE TABLE IF NOT EXISTS panel_materials (
   "lungDefault" INTEGER,
   "altDefault" INTEGER,
   "giraPezzoDefault" BOOLEAN DEFAULT true
-);
-CREATE TABLE IF NOT EXISTS colors (
-  id TEXT PRIMARY KEY,
-  nome TEXT
 );
 CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
@@ -237,7 +217,6 @@ CREATE TABLE IF NOT EXISTS commesse (
         {[
           { id: 'profili', label: 'PROFILI', icon: Database },
           { id: 'pannelli', label: 'PANNELLI', icon: Square },
-          { id: 'colori', label: 'COLORI', icon: Palette },
           { id: 'clienti', label: 'CLIENTI', icon: Users },
           { id: 'commesse', label: 'ARCHIVIO', icon: Calendar },
           { id: 'settings', label: 'SETUP CLOUD', icon: Settings }
@@ -297,11 +276,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                        </div>
-                       {selectedCommessaIds.length > 0 && (
-                          <button onClick={handleDeleteBulkCommesse} className="bg-red-50 text-red-600 border-2 border-red-100 px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all animate-in zoom-in-95">
-                            Elimina {selectedCommessaIds.length}
-                          </button>
-                       )}
                     </div>
                  )}
 
@@ -322,7 +296,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                  </div>
               </div>
 
-              {/* Form Aggiunta Profili */}
               {isAdding && activeTab === 'profili' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95">
                    <input type="text" value={profileForm.codice} onChange={e=>setProfileForm({...profileForm, codice: e.target.value.toUpperCase()})} placeholder="Codice Profilo..." className="p-3 border rounded-xl font-black" />
@@ -335,7 +308,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                 </div>
               )}
 
-              {/* Form Aggiunta Pannelli */}
               {isAdding && activeTab === 'pannelli' && (
                 <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -351,18 +323,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                 </div>
               )}
 
-              {/* Form Aggiunta Colori */}
-              {isAdding && activeTab === 'colori' && (
-                <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 flex flex-col md:flex-row gap-4">
-                   <input type="text" value={colorForm.nome} onChange={e=>setColorForm({...colorForm, nome: e.target.value})} placeholder="Nome Colore..." className="flex-1 p-3 border rounded-xl font-bold uppercase" />
-                   <div className="flex gap-2">
-                      <button onClick={handleSaveColor} className="bg-slate-900 text-white px-10 py-3.5 rounded-xl font-black uppercase shadow-lg flex items-center gap-2"><Save className="w-5 h-5"/> Salva Colore</button>
-                      <button onClick={()=>setIsAdding(false)} className="bg-white border p-3 rounded-xl"><X className="w-5 h-5"/></button>
-                   </div>
-                </div>
-              )}
-
-              {/* Form Aggiunta Clienti */}
               {isAdding && activeTab === 'clienti' && (
                 <div className="p-6 bg-slate-50 border rounded-[2rem] animate-in zoom-in-95 space-y-4">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -415,16 +375,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                          </tr>
                       ))}
 
-                      {activeTab === 'colori' && colors.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
-                        <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
-                           <td className="px-6 py-5 uppercase font-black">{c.nome}</td>
-                           <td className="px-6 py-5 text-slate-400 text-[10px] uppercase font-bold italic tracking-tighter">Colore RAL/Standard</td>
-                           <td className="px-6 py-5 text-center flex justify-center gap-2">
-                              <button onClick={()=>deleteItem('colori', c.id)} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
-                           </td>
-                        </tr>
-                      ))}
-
                       {activeTab === 'clienti' && clients.filter(c=>c.nome.toUpperCase().includes(searchTerm.toUpperCase())).map(c => (
                         <tr key={c.id} className="hover:bg-slate-50 transition-all font-bold">
                            <td className="px-6 py-5 uppercase font-black">{c.nome} <div className="text-[10px] text-slate-400 font-normal">{c.note}</div></td>
@@ -451,22 +401,6 @@ CREATE TABLE IF NOT EXISTS commesse (
                            </td>
                         </tr>
                       ))}
-
-                      {activeTab === 'commesse' && filteredCommesse.length === 0 && (
-                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessuna commessa trovata per l'anno {selectedYear}.</td></tr>
-                      )}
-                      {activeTab === 'profili' && profiles.length === 0 && (
-                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun profilo in archivio.</td></tr>
-                      )}
-                      {activeTab === 'pannelli' && panelMaterials.length === 0 && (
-                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun materiale pannello in archivio.</td></tr>
-                      )}
-                      {activeTab === 'colori' && colors.length === 0 && (
-                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun colore salvato.</td></tr>
-                      )}
-                      {activeTab === 'clienti' && clients.length === 0 && (
-                         <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 italic font-bold">Nessun cliente salvato.</td></tr>
-                      )}
                    </tbody>
                 </table>
               </div>
