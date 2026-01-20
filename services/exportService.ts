@@ -87,6 +87,7 @@ export const exportService = {
     let first = true;
 
     Object.values(results).forEach(group => {
+      const groupColor = group.colore || 'N/D';
       const groupCode = group.codice || 'LIBERO';
       group.sheets.forEach((sheet, sIdx) => {
         if (!first) doc.addPage(); first = false;
@@ -96,15 +97,16 @@ export const exportService = {
         doc.setFontSize(12); doc.setTextColor(100);
         doc.text(`Cliente: ${cliente || '-'} | Commessa: ${commessa || '-'}`, margin, 35);
         doc.setTextColor(15, 23, 42); doc.setFontSize(13);
-        doc.text(`Codice: ${groupCode} | Materiale: ${group.material}`, margin, 44);
+        doc.text(`Codice: ${groupCode} | Materiale: ${group.material} | Colore: ${groupColor}`, margin, 44);
         doc.setFontSize(11); doc.text(`Lastra Grezza: ${sheetW} x ${sheetH} mm | Foglio ${sIdx + 1}`, margin, 50);
 
-        const scale = Math.min((pageWidth - 2 * margin) / sheetW, 130 / sheetH);
+        const scale = Math.min((pageWidth - 2 * margin) / sheetW, 140 / sheetH);
         const offsetX = (pageWidth - sheetW * scale) / 2;
         const offsetY = 65;
         doc.setDrawColor(0); doc.setLineWidth(0.5);
         doc.rect(offsetX, offsetY, sheetW * scale, sheetH * scale);
 
+        // Gestione Legenda Pezzi Piccoli
         const legendMap = new Map<string, number>();
         let nextIdx = 1;
 
@@ -127,37 +129,18 @@ export const exportService = {
           doc.text(textToShow, offsetX + (p.x + p.w/2)*scale, offsetY + (p.y + p.h/2)*scale + 1, { align: 'center' });
         });
         
-        // Riepilogo Pezzi Sotto il Pannello
-        let currentY = offsetY + (sheetH * scale) + 12;
-        
-        doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold");
-        doc.text("RIEPILOGO PEZZI IN QUESTO FOGLIO:", margin, currentY);
-        currentY += 6;
-        
-        const summary: Record<string, number> = {};
-        sheet.panels.forEach(p => { const k = `${p.w}x${p.h}`; summary[k] = (summary[k] || 0) + 1; });
-        
-        doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "normal");
-        let sx = margin;
-        Object.entries(summary).sort((a,b) => b[1] - a[1]).forEach(([dim, q], i) => {
-          doc.text(`${q}x  ${dim} mm`, sx, currentY);
-          sx += 45;
-          if ((i + 1) % 4 === 0) { sx = margin; currentY += 6; }
-        });
-        
-        // Legenda Pezzi Piccoli
+        // Stampa Legenda se presente
         if (legendMap.size > 0) {
-          currentY += 10;
-          doc.setFontSize(9); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
-          doc.text("LEGENDA RIFERIMENTI DISEGNO:", margin, currentY);
-          currentY += 6;
+          doc.setFontSize(9); doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold");
+          doc.text("LEGENDA PEZZI PICCOLI:", margin, 215);
           
-          doc.setFontSize(10); doc.setTextColor(100); doc.setFont("helvetica", "normal");
+          doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "normal");
           let lx = margin;
+          let ly = 222;
           Array.from(legendMap.entries()).sort((a,b) => a[1]-b[1]).forEach(([dim, idx], i) => {
-            doc.text(`${idx}) ${dim} mm`, lx, currentY);
+            doc.text(`${idx}) ${dim} mm`, lx, ly);
             lx += 45;
-            if ((i + 1) % 4 === 0) { lx = margin; currentY += 6; }
+            if ((i + 1) % 4 === 0) { lx = margin; ly += 6; }
           });
         }
 
