@@ -70,7 +70,8 @@ export interface PanelCutRequest {
   id: string;
   codice?: string;
   materiale: string;
-  colore: string;
+  // Added optional colore property to fix type errors in optimizerService
+  colore?: string;
   lunghezza: number;
   altezza: number;
   quantita: number;
@@ -79,6 +80,7 @@ export interface PanelCutRequest {
 
 export interface PlacedPanel {
   material: string;
+  // Added optional colore property to fix type errors in optimizerService
   colore?: string;
   x: number;
   y: number;
@@ -97,6 +99,7 @@ export interface PanelOptimizationResult {
   [key: string]: {
     codice?: string;
     material: string;
+    // Added optional colore property to fix type errors in optimizerService
     colore?: string;
     sheets: OptimizedSheet[];
   };
