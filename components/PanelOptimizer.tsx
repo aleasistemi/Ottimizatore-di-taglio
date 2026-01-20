@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler, Search, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Download, Trash2, Layout, FileText, Square, Save, Boxes, ChevronRight, Ruler, Search, ChevronDown, AlertCircle, Lock, Unlock } from 'lucide-react';
 import { PanelCutRequest, PanelOptimizationResult, CommessaArchiviata, PanelMaterial, Client } from '../types';
 import { optimizerService } from '../services/optimizerService';
 import { exportService } from '../services/exportService';
@@ -113,6 +113,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
   const [altezza, setAltezza] = useState('');
   const [quantita, setQuantita] = useState(1);
   const [rotazione, setRotazione] = useState(true);
+  const [isSheetLocked, setIsSheetLocked] = useState(true);
 
   const [availablePanels, setAvailablePanels] = useState<PanelMaterial[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
@@ -152,6 +153,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
       setLarghezzaLastra(p.lungDefault.toString()); 
       setAltezzaLastra(p.altDefault.toString());
       setRotazione(p.giraPezzoDefault);
+      setIsSheetLocked(true); // Auto-lock su cambio selezione
     } else {
       setSelectedPanelId('');
       setCodicePannello('');
@@ -266,18 +268,6 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
     }
   }, [results, larghezzaLastra, altezzaLastra]);
 
-  const getSheetLegend = (sheet: any, sheetW: number, sheetH: number) => {
-    const scale = Math.min(800 / sheetW, 500 / sheetH);
-    const legendMap = new Map<string, number>();
-    let nextIdx = 1;
-    sheet.panels.forEach((p: any) => {
-      const label = `${p.w}x${p.h}`;
-      const fits = (p.w * scale > 45) && (p.h * scale > 20);
-      if (!fits && !legendMap.has(label)) legendMap.set(label, nextIdx++);
-    });
-    return Array.from(legendMap.entries()).sort((a,b) => a[1]-b[1]);
-  };
-
   const getSheetSummary = (sheet: any) => {
     const summary: Record<string, number> = {};
     sheet.panels.forEach((p: any) => {
@@ -300,16 +290,36 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
         </section>
 
         <section className="bg-white p-6 rounded-[2rem] border shadow-xl space-y-4">
-           <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Square className="w-5 h-5 text-red-600" /> Lastra Officina</h3>
+           <div className="flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase text-slate-800 flex items-center gap-2 tracking-tighter"><Square className="w-5 h-5 text-red-600" /> Lastra Officina</h3>
+              <button 
+                onClick={() => setIsSheetLocked(!isSheetLocked)}
+                className={`p-2 rounded-xl transition-all ${isSheetLocked ? 'text-slate-400 hover:text-slate-600' : 'text-red-600 bg-red-50'}`}
+              >
+                {isSheetLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              </button>
+           </div>
            <SearchableSelect label="Seleziona Pannello Archivio" value={selectedPanelId} options={availablePanels} onChange={handleSelectPanel} placeholder="-- Configura Libera --" displayKey="codice" valueKey="id" secondaryKey="materiale" />
            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Base (mm)</label>
-                 <input type="number" value={larghezzaLastra} onChange={e=>setLarghezzaLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black" />
+                 <input 
+                  type="number" 
+                  value={larghezzaLastra} 
+                  onChange={e=>setLarghezzaLastra(e.target.value)} 
+                  readOnly={isSheetLocked}
+                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'focus:ring-2 focus:ring-red-500 border-slate-200'}`} 
+                 />
               </div>
               <div className="space-y-1">
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Altezza (mm)</label>
-                 <input type="number" value={altezzaLastra} onChange={e=>setAltezzaLastra(e.target.value)} className="w-full p-4 border rounded-2xl font-black" />
+                 <input 
+                  type="number" 
+                  value={altezzaLastra} 
+                  onChange={e=>setAltezzaLastra(e.target.value)} 
+                  readOnly={isSheetLocked}
+                  className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'focus:ring-2 focus:ring-red-500 border-slate-200'}`} 
+                 />
               </div>
            </div>
            <div className="space-y-1">
