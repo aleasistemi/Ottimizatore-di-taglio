@@ -176,16 +176,28 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       alert("Compila tutti i campi obbligatori!");
       return;
     }
+
+    const valTaglio = parseFloat(lunghezzaTaglio.replace(',', '.'));
+    const valBarra = parseFloat(lunghezzaBarra.replace(',', '.'));
+    
+    // Calcolo lunghezza utile effettiva
+    const lunghezzaUtile = valBarra - scartoIniziale - scartoFinale;
+
+    if (valTaglio > lunghezzaUtile) {
+      alert(`ATTENZIONE: La lunghezza del taglio (${valTaglio}mm) supera la capacità utile della barra (${lunghezzaUtile}mm).\n\nL. Barra: ${valBarra}mm\nScarto In.: ${scartoIniziale}mm\nScarto Fin.: ${scartoFinale}mm`);
+      return;
+    }
+
     const newCut: CutRequest = {
       id: Math.random().toString(36).substr(2, 9),
       codice: selectedProfile,
-      lung: parseFloat(lunghezzaTaglio.replace(',', '.')),
+      lung: valTaglio,
       qty: quantita,
       angoli: `${angoloSx}/${angoloDx}`,
       lama,
       scIn: scartoIniziale,
       scFin: scartoFinale,
-      lungBarra: parseFloat(lunghezzaBarra.replace(',', '.'))
+      lungBarra: valBarra
     };
     setDistinta(prev => [...prev, newCut]);
     setLunghezzaTaglio('');
