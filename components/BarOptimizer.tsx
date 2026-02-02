@@ -10,7 +10,6 @@ interface BarOptimizerProps {
   externalData?: CommessaArchiviata | null;
 }
 
-// Semplice componente interno per la selezione con ricerca
 const SearchableSelect = ({ 
   label, 
   value, 
@@ -130,32 +129,25 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     const profilesRaw = localStorage.getItem('alea_profiles');
     if (profilesRaw) {
       const parsed = JSON.parse(profilesRaw) as Profile[];
-      // Ordinamento Alfabetico per Codice
       setAvailableProfiles(parsed.sort((a, b) => a.codice.localeCompare(b.codice)));
     }
     
     const clientsRaw = localStorage.getItem('alea_clients');
     if (clientsRaw) {
       const parsed = JSON.parse(clientsRaw) as Client[];
-      // Ordinamento Alfabetico per Nome
       setAvailableClients(parsed.sort((a, b) => a.nome.localeCompare(b.nome)));
     }
   };
 
   useEffect(() => {
     loadData();
-
     if (externalData && externalData.tipo === 'barre') {
       setCliente(externalData.cliente);
       setCommessa(externalData.numero);
       setDistinta(externalData.dettagli.distinta || []);
       setResults(externalData.dettagli.results || null);
     }
-
-    const handleUpdate = () => {
-      loadData();
-    };
-
+    const handleUpdate = () => loadData();
     window.addEventListener('alea_data_updated', handleUpdate);
     return () => window.removeEventListener('alea_data_updated', handleUpdate);
   }, [externalData]);
@@ -183,12 +175,10 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
 
     const valTaglio = parseFloat(lunghezzaTaglio.replace(',', '.'));
     const valBarra = parseFloat(lunghezzaBarra.replace(',', '.'));
-    
-    // Calcolo lunghezza utile effettiva
     const lunghezzaUtile = valBarra - scartoIniziale - scartoFinale;
 
     if (valTaglio > lunghezzaUtile) {
-      alert(`ATTENZIONE: La lunghezza del taglio (${valTaglio}mm) supera la capacità utile della barra (${lunghezzaUtile}mm).\n\nL. Barra: ${valBarra}mm\nScarto In.: ${scartoIniziale}mm\nScarto Fin.: ${scartoFinale}mm`);
+      alert(`ATTENZIONE: La lunghezza del taglio (${valTaglio}mm) supera la capacità utile della barra (${lunghezzaUtile}mm).`);
       return;
     }
 
@@ -206,13 +196,17 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     setDistinta(prev => [...prev, newCut]);
     setLunghezzaTaglio('');
     setQuantita(1);
+    resetAngles();
+  };
+
+  // Added missing removeCut function to handle cut deletion from the list
+  const removeCut = (id: string) => {
+    setDistinta(prev => prev.filter(cut => cut.id !== id));
   };
 
   const saveCommessaToDb = async () => {
     if (distinta.length === 0) return;
-    
-    const commesseJson = localStorage.getItem('alea_commesse') || '[]';
-    const commesse = JSON.parse(commesseJson);
+    const commesse = JSON.parse(localStorage.getItem('alea_commesse') || '[]');
     const nuovaCommessa: CommessaArchiviata = {
       id: Math.random().toString(36).substr(2, 9),
       numero: commessa || 'Senza Rif.',
@@ -221,22 +215,12 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
       tipo: 'barre',
       dettagli: { distinta, results }
     };
-    const updatedCommesse = [nuovaCommessa, ...commesse];
-    localStorage.setItem('alea_commesse', JSON.stringify(updatedCommesse));
-    
-    if (supabaseService.isInitialized()) {
-        try {
-            await supabaseService.syncTable('commesse', updatedCommesse);
-            alert("Commessa archiviata sul Cloud ALEA!");
-        } catch (e) {
-            alert("Errore sincronizzazione Cloud. Salvata solo localmente.");
-        }
-    } else {
-        alert("Archiviata nell'archivio locale!");
-    }
+    const updated = [nuovaCommessa, ...commesse];
+    localStorage.setItem('alea_commesse', JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('alea_local_mutation'));
+    if (supabaseService.isInitialized()) await supabaseService.syncTable('commesse', updated);
+    alert("Commessa archiviata!");
   };
-
-  const removeCut = (id: string) => setDistinta(prev => prev.filter(c => c.id !== id));
 
   const runOptimization = () => {
     if (distinta.length === 0) return;
@@ -280,15 +264,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
               <span>Dettagli Commessa</span>
             </h3>
             <div className="space-y-5">
-              <SearchableSelect 
-                label="Cliente"
-                value={cliente}
-                options={availableClients}
-                onChange={setCliente}
-                placeholder="Cerca cliente..."
-                displayKey="nome"
-                valueKey="nome"
-              />
+              <SearchableSelect label="Cliente" value={cliente} options={availableClients} onChange={setCliente} placeholder="Cerca cliente..." displayKey="nome" valueKey="nome" />
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Commessa / Rif.</label>
                 <input type="text" value={commessa} onChange={e => setCommessa(e.target.value)} placeholder="ID commessa..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all font-medium" />
@@ -302,15 +278,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
               <span>Aggiunta Taglio</span>
             </h3>
             <div className="space-y-4">
-              <SearchableSelect 
-                label="Profilo"
-                value={selectedProfile}
-                options={availableProfiles}
-                onChange={setSelectedProfile}
-                placeholder="Cerca profilo..."
-                displayKey="codice"
-                valueKey="codice"
-              />
+              <SearchableSelect label="Profilo" value={selectedProfile} options={availableProfiles} onChange={setSelectedProfile} placeholder="Cerca profilo..." displayKey="codice" valueKey="codice" />
               <div className="grid grid-cols-2 gap-4">
                 <div className="relative">
                   <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">L. Barra (mm)</label>
@@ -342,9 +310,7 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
                 <div>
                    <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase block">Angoli</label>
-                      <button onClick={resetAngles} title="Reset 90/90" className="flex items-center gap-1 text-[9px] font-black text-red-500 hover:bg-red-50 px-2 py-0.5 rounded transition-all">
-                        <RotateCcw className="w-3 h-3" /> RESET
-                      </button>
+                      <button onClick={resetAngles} className="flex items-center gap-1 text-[9px] font-black text-red-500 hover:bg-red-50 px-2 py-0.5 rounded transition-all"><RotateCcw className="w-3 h-3" /> RESET</button>
                    </div>
                    <div className="flex items-center space-x-1">
                       <input type="text" value={angoloSx} onChange={e=>setAngoloSx(e.target.value)} className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-xs" />
@@ -447,36 +413,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
                  const pezziSummary = getPezziSummary(data.barre);
                  return (
                    <div key={code} className="space-y-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl flex items-center space-x-5 border border-slate-800">
-                           <div className="bg-red-600/20 p-4 rounded-2xl border border-red-600/30"><Warehouse className="w-8 h-8 text-red-500" /></div>
-                           <div>
-                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Prelievo Magazzino</div>
-                              <div className="text-2xl font-black">{data.barre.length} <span className="text-sm font-bold text-slate-400">Barre</span></div>
-                              <div className="text-[10px] font-bold text-red-400 mt-1 uppercase">Profilo: {code}</div>
-                           </div>
-                        </div>
-                        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl flex items-center space-x-5">
-                           <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200"><Hash className="w-8 h-8 text-slate-400" /></div>
-                           <div>
-                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Conteggio Pezzi</div>
-                              <div className="text-2xl font-black">{pezziSummary.reduce((s, p) => s + p.qty, 0)} <span className="text-sm font-bold text-slate-400">Pezzi</span></div>
-                              <div className="text-[10px] font-bold text-green-600 mt-1 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Pronto per officina</div>
-                           </div>
-                        </div>
-                     </div>
-                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
-                        <div className="px-6 py-4 bg-slate-50 border-b flex items-center gap-2"><Ruler className="w-4 h-4 text-red-600" /><h5 className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Riepilogo Tagli Univoci</h5></div>
-                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                           {pezziSummary.map((p, pIdx) => (
-                              <div key={pIdx} className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                 <div className="text-red-600 font-black text-lg leading-none mb-1">{p.qty}x</div>
-                                 <div className="text-slate-800 font-black text-xs">{p.lung} mm</div>
-                                 <div className="text-[9px] font-bold text-slate-400 uppercase">{p.angoli}</div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
                      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden">
                        <div className="p-6 bg-slate-900 text-white flex justify-between items-center"><div className="space-y-1"><h4 className="font-black text-2xl tracking-tighter text-red-500">{code}</h4><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{data.descrizione}</p></div></div>
                        <div className="p-8 space-y-10">
