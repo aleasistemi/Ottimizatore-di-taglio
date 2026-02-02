@@ -286,7 +286,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
            </div>
            <SearchableSelect label="Seleziona Pannello Archivio" value={selectedPanelId} options={availablePanels} onChange={handleSelectPanel} placeholder="-- Configura Libera --" displayKey="codice" valueKey="id" secondaryKey="materiale" />
            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Base (mm)</label>
                  <input 
                   type="number" 
@@ -296,7 +296,7 @@ export const PanelOptimizer: React.FC<{ externalData?: CommessaArchiviata | null
                   className={`w-full p-4 border rounded-2xl font-black outline-none transition-all ${isSheetLocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-100' : 'bg-white focus:ring-2 focus:ring-red-500 border-red-200'}`} 
                  />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                  <label className="text-[10px] font-black text-slate-400 uppercase block ml-1">Altezza (mm)</label>
                  <input 
                   type="number" 

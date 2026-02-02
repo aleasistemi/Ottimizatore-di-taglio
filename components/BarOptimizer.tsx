@@ -199,7 +199,6 @@ export const BarOptimizer: React.FC<BarOptimizerProps> = ({ externalData }) => {
     resetAngles();
   };
 
-  // Added missing removeCut function to handle cut deletion from the list
   const removeCut = (id: string) => {
     setDistinta(prev => prev.filter(cut => cut.id !== id));
   };
