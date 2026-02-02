@@ -23,40 +23,60 @@ export const optimizerService = {
     });
 
     for (const codice in grouped) {
-      let pieces = [...grouped[codice]];
+      let piecesPool = [...grouped[codice]];
       const profileInfo = PROFILI[codice];
-      const maxLen = pieces[0]?.lungBarra || (profileInfo ? profileInfo.lungMax : null) || 6000;
-      const lama = pieces[0]?.lama || 0;
+      const maxLen = piecesPool[0]?.lungBarra || (profileInfo ? profileInfo.lungMax : null) || 6000;
+      const lama = piecesPool[0]?.lama || 0;
 
       const optimizedBarList: OptimizedBar[] = [];
 
-      // Algoritmo di Ricerca Combinatoria Migliorato (Best-Fit per ogni barra)
-      while (pieces.length > 0) {
-        // Ordiniamo per lunghezza decrescente per gestire prima i pezzi difficili
-        pieces.sort((a, b) => b.lung - a.lung);
-        
-        let scIn = pieces[0].scIn;
-        let scFin = pieces[0].scFin;
-        let capacity = maxLen - scIn - scFin;
-        
-        // Prendiamo sempre il pezzo più lungo rimanente come punto di partenza
-        let currentBarCuts: any[] = [pieces[0]];
-        let currentLoad = pieces[0].lung;
-        pieces.splice(0, 1);
+      // Funzione per trovare la migliore combinazione possibile per una singola barra
+      const findBestPattern = (capacity: number, available: any[]): number[] => {
+        let bestWaste = Infinity;
+        let bestCombination: number[] = [];
 
-        // Cerchiamo la migliore combinazione per riempire lo spazio rimanente
-        // Utilizziamo una strategia ricorsiva limitata o un approccio best-fit dinamico
-        for (let i = 0; i < pieces.length; ) {
-          const p = pieces[i];
-          if (currentLoad + lama + p.lung <= capacity) {
-            currentBarCuts.push(p);
-            currentLoad += lama + p.lung;
-            pieces.splice(i, 1);
-            // Non incrementiamo i perché abbiamo rimosso un elemento
-          } else {
-            i++;
+        // Funzione ricorsiva per esplorare le combinazioni (depth-first search limitata)
+        const backtrack = (remCap: number, startIdx: number, currentCombo: number[]) => {
+          if (remCap < bestWaste) {
+            bestWaste = remCap;
+            bestCombination = [...currentCombo];
           }
-        }
+          if (bestWaste === 0) return; // Ottimo trovato
+
+          for (let i = startIdx; i < available.length; i++) {
+            const p = available[i];
+            const spaceNeeded = currentCombo.length === 0 ? p.lung : p.lung + lama;
+            
+            if (spaceNeeded <= remCap) {
+              // Ottimizzazione: se il pezzo è uguale al precedente provato a questo livello, salta
+              if (i > startIdx && available[i].lung === available[i-1].lung) continue;
+              
+              currentCombo.push(i);
+              backtrack(remCap - spaceNeeded, i + 1, currentCombo);
+              currentCombo.pop();
+              if (bestWaste === 0) return;
+            }
+          }
+        };
+
+        // Ordiniamo per lunghezza decrescente per l'efficienza del backtracking
+        available.sort((a, b) => b.lung - a.lung);
+        backtrack(capacity, 0, []);
+        return bestCombination;
+      };
+
+      while (piecesPool.length > 0) {
+        const scIn = piecesPool[0].scIn;
+        const scFin = piecesPool[0].scFin;
+        const usableCapacity = maxLen - scIn - scFin;
+
+        // Trova la combinazione che lascia meno scarto
+        const bestComboIndices = findBestPattern(usableCapacity, piecesPool);
+        
+        // Estrai i pezzi selezionati dal pool
+        const currentBarCuts = bestComboIndices
+          .sort((a, b) => b - a) // Ordine inverso per rimuovere correttamente dal pool
+          .map(idx => piecesPool.splice(idx, 1)[0]);
 
         const totalCutsLength = currentBarCuts.reduce((sum, p) => sum + p.lung, 0);
         
@@ -72,7 +92,7 @@ export const optimizerService = {
         optimizedBarList.push({
           tagli: currentBarCuts.map(p => ({ lung: p.lung, angoli: p.angoli, lama: p.lama })),
           somma: totalCutsLength,
-          residuo: parseFloat((capacity - (currentBarCuts.length > 0 ? (currentBarCuts.length - 1) * lama : 0) - totalCutsLength).toFixed(2)),
+          residuo: parseFloat((usableCapacity - (currentBarCuts.length > 0 ? (currentBarCuts.length - 1) * lama : 0) - totalCutsLength).toFixed(2)),
           riepilogo: summaryString
         });
       }
